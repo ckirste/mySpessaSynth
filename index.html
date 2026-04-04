@@ -1912,7 +1912,9 @@ class AudioEngine {
     this._eqMid       = 0;
     this._eqHigh      = 0;
     this._spessaReady = false;
-    this._pendingLoad = []; // queued loads before synth ready
+    this._pendingLoad = [];
+    this._channels    = new Map(); // layerId_sfIdx_presetIdx → ch
+    this._nextCh      = 0;
   }
 
   // ── Init SpessaSynth ─────────────────────────────────────────
@@ -2094,8 +2096,7 @@ async ensureCtx() {
 
   // ── Channel management ────────────────────────────────────────
   // Each layer gets its own MIDI channel (0-15, skip 9=drums unless needed)
-  _channels = new Map(); // layerId_sfIdx_presetIdx → ch
-  _nextCh   = 0;
+  // _channels und _nextCh werden im constructor initialisiert
 
   _getChannel(layerId, sfIdx, presetIdx) {
     const key = `${layerId}_${sfIdx}_${presetIdx}`;
