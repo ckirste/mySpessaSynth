@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v4</h1>
+    <h1>Ensemble_v5</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1465,6 +1465,10 @@ window.onerror = (msg, url, line) => {
     debugDiv.innerHTML += `<div style="color:red">ERR: ${msg} (L:${line})</div>`;
     debugDiv.scrollTop = debugDiv.scrollHeight;
 };
+window.addEventListener('unhandledrejection', e => {
+    debugDiv.innerHTML += `<div style="color:orange">PROMISE ERR: ${e.reason}</div>`;
+    debugDiv.scrollTop = debugDiv.scrollHeight;
+});
 
 console.log = (...args) => {
     debugDiv.innerHTML += `<div>LOG: ${args.join(' ')}</div>`;
@@ -2169,6 +2173,12 @@ async ensureCtx() {
   setWidth(v)               { /* stereo width not in SpessaSynth */ }
 
   // ── Compat stubs (UI calls these) ────────────────────────────
+  async ensureAndGetStartT() {
+    await this.ensureCtx();
+    return this.ctx ? this.ctx.currentTime + 0.05 : 0;
+  }
+
+  _silentWarm(sfIdx, presetIdx) { /* SpessaSynth handles internally */ }
   predecodeAll(sfIdx, onProgress) {
     // SpessaSynth handles decoding internally
     const sf = this.soundfonts[sfIdx];
