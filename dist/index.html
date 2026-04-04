@@ -1,0 +1,1459 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Ensemble</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0b0b10; --panel:#10101a; --panel2:#14141f; --border:#1f1f35;
+  --accent:#00e5ff; --accent2:#ff4060; --accent3:#9b7fe8;
+  --dim:#6060a0; --text:#b0b0c8; --textbright:#ddddf0;
+  --glow:0 0 18px rgba(0,229,255,.35); --glow2:0 0 18px rgba(255,64,96,.35);
+  --ui-scale:1;
+  --ui-base-size:14px; --ui-label-size:10px; --ui-mono-size:11px; --ui-key-height:130px;
+}
+.settings-toggle{position:absolute;top:14px;right:16px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-size:1.1rem;width:36px;height:36px;cursor:pointer;transition:all .15s}
+.fs-toggle{position:absolute;top:14px;left:16px;background:none;border:1px solid var(--border);border-radius:8px;color:var(--dim);font-size:1.1rem;width:36px;height:36px;cursor:pointer;transition:all .15s}
+.fs-toggle:hover,.fs-toggle.active{border-color:var(--accent);color:var(--accent)}
+.settings-toggle:hover,.settings-toggle.open{border-color:var(--accent);color:var(--accent)}
+.settings-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;margin-bottom:4px}
+.settings-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-weight:700;margin-bottom:12px}
+.settings-body{display:flex;flex-direction:column;gap:12px}
+.settings-section-lbl{font-size:.55rem;letter-spacing:.15em;color:var(--dim);text-transform:uppercase;margin-bottom:2px}
+.settings-themes{display:flex;flex-wrap:wrap;gap:8px}
+.theme-btn{padding:5px 12px;border-radius:7px;border:1px solid var(--border);background:#0a0e18;color:var(--text);font-size:.65rem;font-family:'Share Tech Mono',monospace;cursor:pointer;transition:all .15s}
+.theme-btn:hover{border-color:var(--accent);color:var(--accent)}
+.theme-btn.active{border-color:var(--accent);background:rgba(0,229,255,.1);color:var(--accent)}
+.settings-colors{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:8px}
+.color-row{display:flex;align-items:center;gap:8px}
+.color-lbl{font-size:.62rem;color:var(--text);flex:1;white-space:nowrap}
+.color-swatch{width:32px;height:28px;border-radius:5px;border:1px solid var(--border);cursor:pointer;padding:0;background:none;overflow:hidden;flex-shrink:0}
+.color-swatch input[type=color]{width:150%;height:150%;margin:-25%;border:none;padding:0;cursor:pointer;opacity:1}
+.settings-sizes{display:flex;flex-direction:column;gap:8px}
+.size-row{display:flex;align-items:center;gap:10px}
+.size-lbl{font-size:.62rem;color:var(--text);width:120px;flex-shrink:0}
+.size-slider{flex:1;accent-color:var(--accent)}
+.size-val{font-size:.62rem;color:var(--accent);font-family:'Share Tech Mono',monospace;width:32px;text-align:right;flex-shrink:0}
+.settings-footer{display:flex;justify-content:flex-end;margin-top:4px}
+.settings-reset-btn{background:#07070f;border:1px solid var(--border);border-radius:7px;color:var(--dim);font-size:.65rem;font-family:'Share Tech Mono',monospace;padding:5px 12px;cursor:pointer;transition:all .15s}
+.settings-reset-btn:hover{border-color:#ff4060;color:#ff4060}
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{background:var(--bg);color:var(--text);font-family:'Share Tech Mono',monospace,Courier;
+  min-height:100vh;display:flex;flex-direction:column;align-items:center;overflow-x:hidden}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,229,255,.025) 1px,transparent 1px),
+  linear-gradient(90deg,rgba(0,229,255,.025) 1px,transparent 1px);background-size:48px 48px}
+.container{position:relative;z-index:1;width:100%;max-width:960px;padding:14px 14px 28px;
+  display:flex;flex-direction:column;gap:14px}
+.header{text-align:center;padding:18px 0 4px;position:relative}
+.header h1{font-family:'Orbitron',monospace,sans-serif;font-weight:900;
+  font-size:clamp(1.3rem,5vw,2.2rem);letter-spacing:.18em;
+  background:linear-gradient(120deg,var(--accent),var(--accent3),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.header .sub{font-size:.65rem;color:var(--accent);opacity:.55;letter-spacing:.3em;margin-top:4px}
+
+.sf-loader-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;transition:border-color .2s}
+.sf-loader-panel.dragover{border-color:var(--accent);box-shadow:var(--glow)}
+.sf-loader-header{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.sf-loader-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase}
+.mem-display{font-size:.58rem;font-family:'Share Tech Mono',monospace;color:var(--dim);background:#0a0e18;border:1px solid var(--border);border-radius:5px;padding:2px 7px;white-space:nowrap}
+.mem-display.warn{color:#ffb830;border-color:#ffb83055}
+.mem-display.danger{color:#ff4060;border-color:#ff406055}
+.sf-add-btn{background:#07070f;border:1px solid var(--border);color:var(--accent);
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.1em;
+  padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .15s}
+.sf-add-btn:hover{border-color:var(--accent);box-shadow:var(--glow);background:rgba(0,229,255,.06)}
+.sf-list{display:flex;flex-direction:column;gap:5px}
+.sf-item{display:flex;align-items:center;gap:8px;background:#07070f;border:1px solid var(--border);border-radius:7px;padding:7px 10px}
+.sf-idx{font-family:'Orbitron',monospace;font-size:.58rem;color:var(--accent);width:18px;text-align:center;opacity:.7;flex-shrink:0}
+.sf-name{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--textbright);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sf-count{font-size:.58rem;color:var(--text);opacity:.4;flex-shrink:0;letter-spacing:.06em}
+.sf-del-btn{background:none;border:1px solid transparent;color:var(--accent2);
+  width:22px;height:22px;border-radius:4px;cursor:pointer;font-size:.7rem;
+  display:flex;align-items:center;justify-content:center;transition:all .12s;flex-shrink:0}
+.sf-del-btn:hover{border-color:var(--accent2);background:rgba(255,64,96,.08)}
+.sf-empty{font-size:.68rem;color:var(--text);opacity:.7;text-align:center;padding:6px 0;letter-spacing:.1em}
+.layer-selects{display:flex;flex-direction:column;gap:3px;flex:1;min-width:0}
+.layer-sf-sel{background:#07070f;border:1px solid var(--dim);color:var(--accent3);
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;padding:5px 8px;
+  border-radius:6px;width:100%;outline:none;cursor:pointer}
+.layer-sf-sel:focus{border-color:var(--accent3)}
+
+/* Preset search widget */
+.preset-search-wrap{position:relative;width:100%}
+.preset-search-input{width:100%;box-sizing:border-box;background:#07070f;border:1px solid var(--border);
+  color:var(--textbright);font-family:'Share Tech Mono',monospace;font-size:.82rem;
+  padding:7px 52px 7px 10px;border-radius:7px;outline:none;cursor:text;transition:border-color .15s}
+.preset-search-input:focus{border-color:var(--accent)}
+.preset-search-clear{position:absolute;right:28px;top:50%;transform:translateY(-50%);
+  background:none;border:none;color:var(--dim);font-size:.9rem;cursor:pointer;padding:4px;line-height:1;display:none}
+.preset-search-clear.visible{display:block}
+.preset-dropdown-toggle{position:absolute;right:0;top:0;bottom:0;width:28px;
+  background:rgba(255,255,255,.04);border:none;border-left:1px solid var(--border);
+  border-radius:0 7px 7px 0;color:var(--dim);font-size:.75rem;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
+.preset-dropdown-toggle:hover{background:rgba(0,229,255,.08);color:var(--accent)}
+.preset-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:100%;width:max-content;max-width:420px;z-index:500;
+  background:#0d0d1a;border:1px solid var(--accent);border-radius:8px;
+  max-height:260px;overflow-y:auto;box-shadow:0 8px 28px rgba(0,0,0,.75);display:none}
+.preset-dropdown.open{display:block}
+.preset-dropdown-item{padding:9px 14px;font-family:'Share Tech Mono',monospace;font-size:.78rem;
+  color:var(--text);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  transition:background .08s;display:flex;align-items:center;gap:6px}
+.preset-dropdown-item:hover,.preset-dropdown-item.selected{background:rgba(0,229,255,.1);color:var(--textbright)}
+.preset-dropdown-item.active{color:var(--accent)}
+.preset-dropdown-empty{padding:10px 14px;font-size:.72rem;color:var(--dim);font-style:italic}
+.preset-fav-btn{background:none;border:none;cursor:pointer;font-size:.85rem;padding:0 2px;
+  opacity:.7;transition:opacity .12s,transform .12s;flex-shrink:0;line-height:1}
+.preset-fav-btn:hover{opacity:1}
+.preset-fav-btn.on{opacity:1}
+.preset-item-label{flex:1;overflow:hidden;text-overflow:ellipsis}
+.preset-dropdown-sep{height:1px;background:var(--border);margin:4px 0}
+.preset-dropdown-section{padding:4px 14px 2px;font-size:.58rem;letter-spacing:.18em;
+  color:var(--accent);opacity:.6;text-transform:uppercase}
+
+.progress-wrap{display:none;flex-direction:column;gap:6px}
+.progress-wrap.visible{display:flex}
+.prog-label{font-size:.65rem;letter-spacing:.15em;color:var(--accent)}
+.prog-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--accent3),var(--accent));
+  border-radius:3px;width:0%;transition:width .12s}
+
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end}
+.ps{display:flex;flex-direction:column;gap:6px;flex:1;min-width:130px}
+.ps label{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase}
+select{background:#07070f;border:1px solid var(--border);color:var(--textbright);
+  font-family:'Share Tech Mono',monospace,Courier;font-size:.78rem;padding:7px 10px;
+  border-radius:6px;width:100%;outline:none;cursor:pointer;transition:border-color .2s}
+select:hover,select:focus{border-color:var(--accent);box-shadow:var(--glow)}
+select:disabled{opacity:.7;cursor:default}
+input[type=range]{-webkit-appearance:none;height:6px;width:100%;padding:0;
+  background:linear-gradient(to right,var(--accent) var(--val,75%),var(--border) var(--val,75%));
+  border:none;border-radius:3px;outline:none;cursor:pointer}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:15px;height:15px;
+  background:var(--accent);border-radius:50%;box-shadow:var(--glow);cursor:pointer}
+input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--accent);
+  border-radius:50%;box-shadow:var(--glow);cursor:pointer;border:none}
+.octave-ctrl{display:flex;align-items:center;gap:8px}
+.oct-btn{width:30px;height:30px;background:#07070f;border:1px solid var(--border);
+  color:var(--accent);font-size:1.1rem;border-radius:6px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all .15s;user-select:none}
+.oct-btn:hover,.oct-btn:active{border-color:var(--accent);background:rgba(0,229,255,.08);box-shadow:var(--glow)}
+.oct-disp{font-family:'Orbitron',monospace;font-size:1rem;color:var(--accent);min-width:22px;text-align:center}
+.status-bar{display:flex;align-items:center;gap:9px;font-size:.68rem;color:var(--accent3);letter-spacing:.08em}
+.sdot{width:8px;height:8px;border-radius:50%;background:var(--dim);flex-shrink:0}
+.sdot.loading{background:var(--accent2);box-shadow:var(--glow2);animation:blink .5s infinite}
+.sdot.ready{background:var(--accent);box-shadow:var(--glow);animation:pulse 2.5s ease-in-out infinite}
+.sdot.error{background:var(--accent2)}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.viz{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:12px 14px;display:flex;gap:3px;align-items:flex-end;height:65px;overflow:hidden}
+.vbar{flex:1;border-radius:2px 2px 0 0;min-height:3px;transition:height .07s ease-out,background .08s}
+
+.ml-btn{background:#0d1117;border:1px solid #333;border-radius:5px;color:#555;font-size:.6rem;font-family:'Share Tech Mono',monospace;font-weight:700;width:20px;height:20px;cursor:pointer;padding:0;flex-shrink:0;transition:all .15s;display:flex;align-items:center;justify-content:center;line-height:1}
+.ml-btn:hover{border-color:var(--accent);color:var(--accent)}
+.ml-btn.ml-waiting{border-color:#ff6d00;color:#ff6d00;animation:ml-pulse .6s infinite alternate}
+.ml-btn.ml-mapped{border-color:#b388ff;color:#b388ff;background:#b388ff18}
+.ml-btn.ml-mapped:hover{border-color:#ff4060;color:#ff4060}
+@keyframes ml-pulse{from{opacity:.4}to{opacity:1}}
+.drawbar-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.drawbar-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
+.drawbar-header:hover{background:rgba(0,229,255,.04)}
+.drawbar-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-weight:700}
+.drawbar-hint{font-size:.6rem;color:var(--dim);flex:1}
+.drawbar-toggle{background:none;border:none;color:var(--dim);font-size:.9rem;cursor:pointer;padding:0;transition:transform .2s;line-height:1}
+.drawbar-toggle.open{transform:rotate(180deg)}
+.drawbar-body{display:none;padding:12px 16px 16px}
+.drawbar-body.open{display:block}
+.drawbar-row{display:flex;flex-wrap:wrap;gap:12px}
+.drawbar-stop{display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;width:64px}
+.kb-wrap2-landscape .drawbar-stop{width:44px;gap:2px}
+.kb-wrap2-landscape .drawbar-knob{width:36px !important;height:36px !important}
+.kb-wrap2-landscape .drawbar-name{font-size:.55rem;width:44px}
+.kb-wrap2-landscape .drawbar-mute-lbl{font-size:.45rem}
+.drawbar-knob{width:52px;height:52px;border-radius:50%;border:3px solid;display:flex;align-items:center;justify-content:center;transition:all .18s cubic-bezier(.4,0,.2,1);position:relative;flex-shrink:0}
+.drawbar-stop:not(.muted) .drawbar-knob{box-shadow:0 0 14px var(--dc), 0 0 4px var(--dc) inset}
+.drawbar-stop.muted .drawbar-knob{background:#0a0e18 !important;border-color:#2a2e3a !important;box-shadow:none}
+.drawbar-knob-dot{width:10px;height:10px;border-radius:50%;background:currentColor;transition:all .18s}
+.drawbar-stop.muted .drawbar-knob-dot{background:#2a2e3a;box-shadow:none}
+.drawbar-name{font-size:.58rem;font-family:'Share Tech Mono',monospace;text-align:center;width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3;transition:color .18s}
+.drawbar-stop:not(.muted) .drawbar-name{color:var(--textbright)}
+.drawbar-stop.muted .drawbar-name{color:var(--dim);opacity:.5}
+.drawbar-mute-lbl{font-size:.48rem;letter-spacing:.08em;text-transform:uppercase;transition:color .18s}
+.drawbar-stop.muted .drawbar-mute-lbl{color:#555}
+.drawbar-stop:not(.muted) .drawbar-mute-lbl{color:var(--accent)}
+.chord-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.chord-header{display:flex;align-items:center;gap:8px;padding:10px 16px;cursor:pointer;user-select:none}
+.chord-header:hover{background:rgba(0,229,255,.04)}
+.chord-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-weight:700;white-space:nowrap}
+.chord-hint{font-size:.6rem;color:var(--dim);flex:1}
+.chord-toggle{background:none;border:none;color:var(--dim);font-size:.9rem;cursor:pointer;padding:0;transition:transform .2s;line-height:1;flex-shrink:0}
+.chord-toggle.open{transform:rotate(180deg)}
+.chord-body{display:none;padding:10px 14px 14px;display:flex;flex-direction:column;gap:10px}
+.chord-body.open{display:flex}
+.chord-body{display:none}
+.chord-root-row{display:flex;flex-wrap:wrap;gap:5px}
+.chord-type-row{display:flex;flex-wrap:wrap;gap:5px}
+.chord-sel-btn{padding:7px 12px;border-radius:6px;border:1px solid var(--border);background:#0a0e18;color:var(--textbright);font-size:.8rem;font-family:'Share Tech Mono',monospace;cursor:pointer;transition:all .15s;white-space:nowrap}
+.chord-sel-btn:hover{border-color:var(--accent);color:var(--accent)}
+.chord-sel-btn.active{border-color:var(--accent);background:rgba(0,229,255,.12);color:var(--accent);font-weight:700}
+.chord-display{display:flex;align-items:center;gap:10px;min-height:28px;flex-wrap:wrap}
+.chord-display-name{font-size:1.3rem;font-family:'Share Tech Mono',monospace;color:var(--accent);font-weight:700;min-width:80px}
+.chord-display-notes{display:flex;flex-wrap:wrap;gap:5px}
+.chord-note-chip{padding:4px 10px;border-radius:5px;font-size:.8rem;font-family:'Share Tech Mono',monospace;border:1px solid var(--accent);color:var(--textbright);background:rgba(0,229,255,.08)}
+.chord-play-btn{padding:5px 14px;border-radius:6px;border:1px solid var(--accent3);background:rgba(155,127,232,.1);color:var(--textbright);font-size:.75rem;font-family:'Share Tech Mono',monospace;cursor:pointer;transition:all .15s;margin-left:auto}
+.chord-play-btn:hover{background:rgba(155,127,232,.25);color:var(--accent3)}
+.kb-wrap{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:14px 14px 18px}
+.kb-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.kb-scroll::-webkit-scrollbar{display:none}
+.kb-wrap2-landscape{position:fixed !important;inset:0;z-index:9000;background:#09090f;
+  border-radius:0 !important;border:none !important;padding:0 !important;
+  display:flex;flex-direction:column;touch-action:none}
+.kb-wrap2-landscape .kb-header{padding:6px 12px;border-bottom:1px solid var(--border);
+  background:#09090f;flex-shrink:0;display:flex;justify-content:space-between;align-items:center}
+.kb-wrap2-landscape .kb-scroll{flex:1;overflow-x:auto;overflow-y:hidden;height:calc(100% - 48px)}
+.kb-wrap2-landscape .keyboard{height:100% !important}
+.kb-wrap2-landscape .key.white{height:100% !important}
+.kb-wrap2-landscape .key.black{height:63% !important}
+.kb-header{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;
+  margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.kb-nav{display:flex;gap:6px}
+.kb-nav-btn{background:#0a0e18;border:1px solid var(--border);border-radius:7px;color:var(--accent);
+  font-size:.9rem;width:40px;height:40px;cursor:pointer;transition:all .15s;user-select:none;-webkit-tap-highlight-color:transparent}
+.kb-nav-btn:hover{border-color:var(--accent);background:rgba(0,229,255,.08)}
+.kb-nav-btn:active{transform:scale(.92)}
+.keyboard{position:relative;height:130px;user-select:none;touch-action:none}
+.key{position:absolute;flex-shrink:0;border-radius:0 0 7px 7px;cursor:pointer;
+  display:flex;align-items:flex-end;justify-content:center;padding-bottom:6px;top:0}
+.klabel{font-size:.75rem;font-family:'Share Tech Mono',monospace;pointer-events:none;opacity:.9;color:#c084fc;font-weight:700;text-shadow:0 0 6px #a855f7}
+.key.white{background:linear-gradient(to bottom,#d8d8ec,#f0f0f8);border:1px solid #888;
+  border-top:none;z-index:1;color:#333;height:130px;
+  box-shadow:0 4px 5px rgba(0,0,0,.6),inset 0 -1px 3px rgba(0,0,0,.15)}
+.key.white:hover{background:linear-gradient(to bottom,#c5c5e0,#e0e0f0)}
+.key.white.active{background:linear-gradient(to bottom,rgba(0,229,255,.55),rgba(0,229,255,.2));
+  box-shadow:0 0 14px rgba(0,229,255,.7),inset 0 2px 4px rgba(0,229,255,.3);transform:translateY(2px)}
+.key.black{background:linear-gradient(to bottom,#1a1a28,#0a0a12);height:82px;position:absolute;
+  z-index:2;border-radius:0 0 4px 4px;border:1px solid #2a2a3a;border-top:none;
+  color:rgba(255,255,255,.25);box-shadow:0 5px 8px rgba(0,0,0,.9),inset 0 -1px 3px rgba(0,0,0,.5)}
+.key.black:hover{background:linear-gradient(to bottom,#252538,#141422)}
+.key.black.active{background:linear-gradient(to bottom,rgba(0,229,255,.65),rgba(0,229,255,.2));
+  box-shadow:0 0 12px rgba(0,229,255,.9);transform:translateY(2px)}
+
+.shortcuts{display:flex;flex-wrap:wrap;gap:5px;justify-content:center;padding:2px 0 10px}
+.kchip{background:#07070f;border:1px solid var(--border);border-radius:5px;
+  padding:3px 7px;font-size:.58rem;letter-spacing:.06em;color:var(--text);
+  opacity:.55;display:flex;gap:4px;align-items:center}
+.kchip span{background:var(--border);border-radius:3px;padding:1px 4px;color:var(--accent);font-size:.6rem}
+/* Session panel */
+.session-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.session-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;flex-shrink:0}
+.session-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1}
+.session-btn{background:#07070f;border:1px solid var(--border);color:var(--accent);
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.1em;
+  padding:5px 14px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;display:inline-flex;align-items:center}
+.session-btn:hover{border-color:var(--accent);box-shadow:var(--glow);background:rgba(0,229,255,.06)}
+.session-load-lbl{cursor:pointer}
+.session-info{font-family:'Share Tech Mono',monospace;font-size:.6rem;color:var(--text);opacity:.4;flex:1}
+
+.info-box{background:var(--panel2);border:1px solid var(--border);border-radius:10px;
+  padding:12px 14px;font-size:.68rem;line-height:1.7;color:var(--text);opacity:.75}
+.info-box b{color:var(--accent3)}
+
+/* Effects panel */
+.fx-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:10px}
+.fx-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase}
+.fx-title-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:2px}
+.fx-lock-btn{background:none;border:1px solid var(--border);border-radius:7px;padding:3px 8px;cursor:pointer;font-size:.85rem;color:var(--dim);transition:all .15s}
+.fx-lock-btn:hover{border-color:var(--accent);color:var(--accent)}
+.fx-lock-btn.locked{border-color:#ff6d00;color:#ff6d00}
+.fx-slider-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px 20px}
+.fx-slider-row.locked input[type=range]{pointer-events:none;opacity:.45}
+.fx-slider-row.locked .fx-filter-btn{pointer-events:none;opacity:.45}
+.fx-item{display:flex;flex-direction:column;gap:5px}
+.fx-item-header{display:flex;justify-content:space-between;align-items:baseline}
+.fx-label{font-size:.62rem;letter-spacing:.15em;color:var(--accent);text-transform:uppercase}
+.fx-value{font-family:'Orbitron',monospace;font-size:.6rem;color:var(--text);opacity:.65;letter-spacing:.04em}
+.fx-toggle{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.62rem;letter-spacing:.1em;
+  padding:4px 10px;border-radius:5px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.fx-toggle.on{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.07);box-shadow:0 0 8px rgba(0,229,255,.2)}
+.fx-sep{width:1px;height:28px;background:var(--border);flex-shrink:0}
+.fx-divider{height:1px;background:var(--border);margin:2px 0}
+
+/* Layer list */
+.layers-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:16px 18px;display:flex;flex-direction:column;gap:12px}
+.layers-header{display:flex;justify-content:space-between;align-items:center}
+.layers-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase}
+.add-layer-btn{background:#07070f;border:1px solid var(--border);color:var(--accent);
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;letter-spacing:.1em;
+  padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:5px}
+.add-layer-btn:hover{border-color:var(--accent);box-shadow:var(--glow);background:rgba(0,229,255,.06)}
+.add-layer-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+#panicBtn{width:100%;padding:6px 10px;background:#1a0505;border:1.5px solid #ff3a3a;
+  color:#ff3a3a;border-radius:7px;cursor:pointer;font-weight:700;font-size:13px;
+  letter-spacing:.04em;transition:all .15s}
+#panicBtn:hover{background:#ff3a3a;color:#fff;box-shadow:0 0 12px #ff3a3a88}
+#panicBtn:active{transform:scale(.96)}
+.layer-list{display:flex;flex-direction:column;gap:18px;padding-top:6px}
+.reg-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 16px 14px}
+.reg-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.reg-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-weight:700;white-space:nowrap}
+.reg-hint{font-size:.6rem;color:var(--dim)}
+.reg-row{display:flex;flex-wrap:wrap;gap:10px}
+.reg-stop{display:flex;flex-direction:column;align-items:center;gap:5px;position:relative}
+.reg-btn{width:54px;height:54px;border-radius:50%;border:3px solid #2a2e3a;background:#0a0e18;cursor:pointer;position:relative;transition:all .18s;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:2px;user-select:none}
+.reg-btn.filled{border-color:var(--rc);box-shadow:0 0 14px var(--rc), 0 0 4px var(--rc) inset;background:color-mix(in srgb, var(--rc) 18%, #0a0e18)}
+.reg-btn.active-load{transform:scale(.92)}
+.reg-btn.saving{animation:reg-save-pulse .15s 3}
+@keyframes reg-save-pulse{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
+.reg-num{font-size:.65rem;font-family:'Share Tech Mono',monospace;color:var(--dim);font-weight:700;pointer-events:none}
+.reg-btn.filled .reg-num{color:var(--rc)}
+.reg-name{font-size:.52rem;font-family:'Share Tech Mono',monospace;text-align:center;width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--dim);line-height:1.2}
+.reg-btn.filled ~ .reg-name{color:var(--textbright)}
+.reg-save-ring{position:absolute;inset:-3px;border-radius:50%;border:3px solid transparent;pointer-events:none}
+.reg-btn.holding .reg-save-ring{border-color:#ffd740;animation:reg-ring .6s linear forwards}
+@keyframes reg-ring{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0% 0 0)}}
+.reg-nav-row{display:flex;align-items:center;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid var(--border)}
+.reg-nav-btn{background:#0d1117;border:1px solid var(--border);border-radius:8px;color:var(--accent);font-size:1rem;width:38px;height:38px;cursor:pointer;transition:all .15s;flex-shrink:0}
+.reg-nav-btn:hover{border-color:var(--accent);background:rgba(0,229,255,.08)}
+.reg-nav-btn:active{transform:scale(.92)}
+.reg-nav-disp{flex:1;text-align:center;font-family:'Share Tech Mono',monospace;font-size:.72rem;color:var(--textbright);background:#0a0e18;border:1px solid var(--border);border-radius:8px;padding:6px 10px;min-width:80px}
+.reg-nav-learn{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.reg-nav-learn span{font-size:.55rem;color:var(--dim);letter-spacing:.05em}
+.reg-ml{margin-top:1px}
+.fav-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:10px 14px 12px;margin-bottom:10px}
+.fav-header{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.fav-title{font-size:.72rem;font-weight:700;letter-spacing:.12em;color:var(--accent);text-transform:uppercase}
+.fav-hint{font-size:.65rem;color:var(--dim)}
+.fav-list{display:flex;flex-wrap:wrap;gap:7px;min-height:28px}
+.fav-chip{display:flex;align-items:center;gap:5px;background:#0d1117;border:1px solid var(--border);border-radius:8px;padding:4px 10px 4px 8px;cursor:pointer;transition:all .12s;max-width:220px}
+.fav-chip:hover{border-color:var(--accent);background:rgba(0,229,255,.07)}
+.fav-chip-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.fav-chip-name{font-size:.85rem;font-family:'Share Tech Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-weight:600}
+.fav-chip-sf{font-size:.68rem;font-family:'Share Tech Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.75}
+.fav-chip-del{margin-left:3px;background:none;border:none;cursor:pointer;color:var(--dim);font-size:.75rem;padding:0;line-height:1;flex-shrink:0;opacity:.6}
+.fav-chip-del:hover{color:#ff4444;opacity:1}
+.fav-chip-empty{font-size:.68rem;color:var(--dim);padding:4px 0}
+.layer-fav-btn{background:none;border:none;cursor:pointer;font-size:1rem;padding:0 2px;opacity:.7;transition:all .15s;flex-shrink:0;line-height:1;color:var(--dim)}
+.layer-fav-btn:hover{opacity:1;transform:scale(1.2);color:var(--accent)}
+.layer-fav-btn.saved{opacity:1;color:#ffd740}
+
+.layer-row{position:relative;background:#07070f;border:1.5px solid var(--border);
+  border-radius:12px;padding:0;transition:border-color .2s;margin-top:10px}
+.layer-row.layer-muted{opacity:.45}
+
+/* Group-box legend: preset name floats in the top border */
+.layer-legend{position:absolute;top:-10px;left:14px;display:flex;align-items:center;gap:5px;background:#07070f;padding:0 4px;max-width:calc(100% - 80px)}
+.layer-legend-name{font-family:'Share Tech Mono',monospace;font-size:.72rem;font-weight:600;
+  letter-spacing:.04em;color:var(--textbright);
+  background:#07070f;padding:0 7px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  border-radius:4px;line-height:1.6;cursor:pointer;pointer-events:all;max-width:160px}
+.layer-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;
+  box-shadow:0 0 5px currentColor;background:#07070f;pointer-events:none}
+
+/* Compact bar: controls only, no name needed */
+.layer-compact{display:flex;align-items:center;gap:8px;padding:10px 10px 8px;min-height:52px}
+.layer-expand-btn{background:none;border:none;color:var(--dim);cursor:pointer;font-size:.75rem;
+  padding:0 4px;flex-shrink:0;transition:transform .15s;line-height:1;margin-left:auto}
+.layer-expand-btn.open{transform:rotate(90deg)}
+
+/* Expandable details */
+.layer-details{display:none;flex-direction:column;gap:0;border-top:1px solid var(--border)}
+.layer-details.open{display:flex}
+.layer-preset-row{display:flex;align-items:center;padding:8px 12px 6px;gap:8px}
+.layer-search-input{background:#07070f;border:1px solid var(--border);color:var(--textbright);
+  font-family:'Share Tech Mono',monospace;font-size:.7rem;padding:5px 8px;border-radius:5px;
+  width:100%;box-sizing:border-box;outline:none}
+.layer-search-input:focus{border-color:var(--accent)}
+.layer-search-input::placeholder{color:var(--dim);font-size:.6rem}
+.layer-top{display:flex;align-items:center;gap:10px;padding:4px 12px 0}
+.layer-color{width:10px;height:10px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.layer-select{background:#07070f;border:1px solid var(--border);color:var(--textbright);
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;padding:4px 8px;
+  border-radius:5px;flex:1;min-width:120px;outline:none;cursor:pointer}
+.layer-select:focus{border-color:var(--accent)}
+
+/* Bottom bar: all controls */
+.layer-bottom{display:flex;align-items:center;gap:14px;padding:8px 12px 10px;flex-wrap:wrap}
+
+/* Volume */
+.layer-vol-wrap{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.layer-vol-lbl{font-size:.55rem;color:var(--text);opacity:.45;letter-spacing:.12em;white-space:nowrap}
+.layer-vol{-webkit-appearance:none;height:5px;width:110px;flex-shrink:0;padding:0;
+  background:linear-gradient(to right,var(--accent) var(--lv,75%),var(--border) var(--lv,75%));
+  border:none;border-radius:3px;outline:none;cursor:pointer}
+.layer-vol::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  background:var(--accent);border-radius:50%;cursor:pointer;box-shadow:0 0 4px currentColor}
+
+/* Transpose */
+.layer-transpose{display:flex;align-items:center;gap:4px}
+.tr-btn{width:24px;height:24px;background:var(--border);border:none;color:var(--text);
+  font-size:.85rem;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  transition:all .12s;user-select:none}
+.tr-btn:hover{background:var(--dim);color:var(--accent)}
+.tr-val{font-size:.65rem;font-family:'Orbitron',monospace;color:var(--accent3);
+  min-width:32px;text-align:center;letter-spacing:.05em}
+
+/* Key range */
+.layer-keyrange{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.kr-btn{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.06em;
+  padding:7px 10px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;line-height:1.2;min-height:32px}
+.kr-btn:hover{border-color:var(--accent3);color:var(--accent3)}
+.kr-btn.learning{border-color:var(--accent2);color:var(--accent2);background:rgba(255,64,96,.12);animation:blink .4s infinite}
+.kr-note{font-family:'Orbitron',monospace;font-size:.65rem;color:var(--accent3);
+  min-width:32px;text-align:center;letter-spacing:.04em;opacity:.8}
+.kr-sep{font-size:.7rem;color:var(--dim)}
+
+/* Mono/Bass/Mute/Del */
+.layer-melody-btn,.layer-bass-btn{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.72rem;letter-spacing:.08em;
+  padding:7px 12px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0;min-height:32px}
+.layer-melody-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+.layer-melody-btn.on{border-color:var(--accent2);color:var(--accent2);background:rgba(255,64,96,.1);box-shadow:0 0 7px rgba(255,64,96,.25)}
+.layer-bass-btn:hover{border-color:var(--accent3);color:var(--accent3)}
+.layer-bass-btn.on{border-color:var(--accent3);color:var(--accent3);background:rgba(155,127,232,.1);box-shadow:0 0 7px rgba(155,127,232,.25)}
+.layer-empty{font-size:.75rem;color:var(--text);opacity:.7;text-align:center;padding:12px 0;letter-spacing:.1em}
+
+/* Metronome panel */
+.metro-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.metro-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.metro-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;flex-shrink:0}
+.metro-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.metro-btn{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.1em;
+  padding:5px 14px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.metro-btn:hover{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.06)}
+.metro-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.1);box-shadow:var(--glow)}
+.metro-tap{background:#07070f;border:1px solid #ffb830;color:#ffb830;
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.12em;
+  padding:5px 10px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.metro-tap:hover{background:rgba(255,184,48,.1);box-shadow:0 0 8px rgba(255,184,48,.3)}
+.metro-tap.flash{background:rgba(255,184,48,.25) !important;box-shadow:0 0 12px rgba(255,184,48,.6)}
+.metro-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.metro-bpm-wrap{display:flex;align-items:center;gap:6px}
+.metro-nudge{width:24px;height:28px;background:#07070f;border:1px solid var(--border);
+  color:var(--text);font-size:1rem;border-radius:5px;cursor:pointer;transition:all .12s;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.metro-nudge:hover{border-color:var(--accent);color:var(--accent)}
+.metro-bpm-display{display:flex;flex-direction:column;align-items:center;min-width:48px}
+.metro-bpm-val{font-family:'Orbitron',monospace;font-size:1.1rem;color:var(--accent3);line-height:1;letter-spacing:.03em}
+.metro-bpm-lbl{font-size:.48rem;letter-spacing:.18em;color:var(--text);opacity:.4;margin-top:1px}
+.metro-bpm-slider{-webkit-appearance:none;height:4px;width:50px;flex-shrink:0;
+  background:linear-gradient(to right,var(--accent3) var(--sv,30%),var(--border) var(--sv,30%));
+  border:none;border-radius:2px;outline:none;cursor:pointer}
+.metro-bpm-slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  background:var(--accent3);border-radius:50%;cursor:pointer}
+.metro-sig-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.metro-sig-lbl{font-size:.55rem;letter-spacing:.12em;color:var(--text);opacity:.45;white-space:nowrap}
+.metro-sig-sel{background:#07070f;border:1px solid var(--border);color:var(--textbright);
+  font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:3px 6px;
+  border-radius:5px;outline:none;cursor:pointer}
+.metro-vol-wrap{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.metro-vol-slider{-webkit-appearance:none;height:4px;width:70px;
+  background:linear-gradient(to right,var(--accent) 80%,var(--border) 80%);
+  border:none;border-radius:2px;outline:none;cursor:pointer}
+.metro-vol-slider::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  background:var(--accent);border-radius:50%;cursor:pointer}
+/* Beat indicators */
+.metro-beat-row{display:flex;gap:6px;align-items:center;min-height:18px}
+.metro-beat{width:14px;height:14px;border-radius:50%;background:var(--border);
+  transition:background .06s,box-shadow .06s;flex-shrink:0}
+.metro-beat.accent{background:var(--dim);width:18px;height:18px}
+.metro-beat.active{background:var(--accent3) !important;box-shadow:0 0 10px var(--accent3)}
+.metro-beat.accent.active{background:var(--accent) !important;box-shadow:0 0 14px var(--accent)}
+
+/* Recorder panel */
+.rec-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.rec-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.rec-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;flex-shrink:0}
+.rec-controls{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.rec-btn{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.1em;
+  padding:5px 11px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;user-select:none}
+.rec-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.06)}
+.rec-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+.rec-record{color:var(--accent2);border-color:var(--accent2)}
+.rec-record:hover{background:rgba(255,64,96,.08) !important;box-shadow:var(--glow2)}
+.rec-record.active{background:rgba(255,64,96,.15) !important;border-color:var(--accent2) !important;color:var(--accent2) !important;box-shadow:var(--glow2);animation:blink .7s ease-in-out infinite}
+.rec-overdub{color:#ffb830;border-color:#ffb830}
+.rec-overdub:hover:not(:disabled){background:rgba(255,184,48,.08) !important;box-shadow:0 0 8px rgba(255,184,48,.4)}
+.rec-overdub.active{background:rgba(255,184,48,.15) !important;border-color:#ffb830 !important;color:#ffb830 !important;box-shadow:0 0 8px rgba(255,184,48,.5);animation:blink .7s ease-in-out infinite}
+.rec-play.active{border-color:var(--accent) !important;color:var(--accent) !important;background:rgba(0,229,255,.1) !important}
+.rec-loop.active{border-color:var(--accent3);color:var(--accent3);background:rgba(155,127,232,.1)}
+.rec-sep{width:1px;height:22px;background:var(--border);flex-shrink:0}
+.rec-load-lbl{display:inline-flex;align-items:center;cursor:pointer}
+.rec-status-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rec-indicator{width:10px;height:10px;border-radius:50%;background:var(--border);flex-shrink:0;transition:background .2s}
+.rec-indicator.recording{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 1s ease-in-out infinite}
+.rec-indicator.playing{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+.rec-time{font-family:'Orbitron',monospace;font-size:.75rem;color:var(--accent3);min-width:58px;letter-spacing:.05em}
+.rec-info{font-family:'Share Tech Mono',monospace;font-size:.62rem;color:var(--text);opacity:.5;flex:1;white-space:nowrap}
+.rec-progress-wrap{flex:1;min-width:80px;height:4px;background:var(--border);border-radius:2px;overflow:hidden;cursor:pointer}
+.rec-progress-bar{height:100%;background:var(--accent);border-radius:2px;transition:width .1s linear}
+
+/* ── Trombone ────────────────────────────────────────────────── */
+.tbone-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px}
+.tbone-header{display:flex;align-items:center;gap:8px;padding:10px 16px;user-select:none}
+
+.tbone-title{font-size:.62rem;letter-spacing:.2em;color:#d4a017;text-transform:uppercase;font-weight:700;white-space:nowrap;flex:1}
+.tbone-header-controls{display:flex;align-items:center;gap:6px}
+.tbone-layer-sel{background:#0a0e18;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.62rem;padding:3px 6px;font-family:"Share Tech Mono",monospace;max-width:130px}
+.tbone-gyro-btn{background:#0a0e18;border:1px solid var(--border);border-radius:6px;color:var(--dim);font-size:.6rem;padding:3px 8px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.tbone-gyro-btn.active{border-color:#d4a017;color:#ffd700;background:rgba(212,160,23,.1)}
+.tbone-toggle{display:none!important}
+.tbone-toggle.open{transform:rotate(180deg)}
+.tbone-body{display:none;padding:10px 16px 16px;gap:8px;touch-action:none}
+/* Blow area: taller, more prominent */
+.tbone-blow-area{min-height:64px;display:flex;align-items:center;justify-content:center;
+  border-radius:10px;border:2px dashed #b8860b55;background:#0d0900;
+  font-size:1.1rem;letter-spacing:.15em;color:#b8860b;cursor:pointer;
+  user-select:none;-webkit-tap-highlight-color:transparent;transition:all .12s;
+  touch-action:none}
+.tbone-blow-area.blowing{background:#1a1000;border-color:#ffd700;color:#ffd700;
+  box-shadow:0 0 18px rgba(255,215,0,.3)}
+/* Scroll strips: thin touch-through zones on left+right of fullArea */
+.tbone-scroll-strip{position:absolute;top:0;bottom:0;width:14%;z-index:50;
+  touch-action:pan-y;cursor:ns-resize;background:transparent}
+.tbone-scroll-strip.left{left:0}
+.tbone-scroll-strip.right{right:0}
+.tbone-body.open{display:flex;flex-direction:column}
+.tbone-display-row{display:flex;align-items:baseline;gap:14px;justify-content:center;flex-wrap:wrap}
+.tbone-note-display{font-size:2.8rem;font-family:"Orbitron",monospace;color:#ffd700;font-weight:700;line-height:1;text-shadow:0 0 20px #d4a017}
+.tbone-partial-display{font-size:.72rem;font-family:"Share Tech Mono",monospace;color:#b8860b;letter-spacing:.1em}
+.tbone-info{font-size:.6rem;color:var(--dim);text-align:center}
+
+.tbone-size-row{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+.tbone-size-lbl{font-size:.62rem;color:var(--dim);white-space:nowrap;font-family:"Share Tech Mono",monospace}
+.tbone-size-sl{flex:1;accent-color:#d4a017}
+.tbone-size-val{font-size:.62rem;color:#d4a017;font-family:"Share Tech Mono",monospace;width:40px;text-align:right;flex-shrink:0}
+
+/* ── Zugposaune – neues Design ── */
+.tbone-full-area{position:relative;width:100%;height:150px;background:#08080e;
+  display:flex;align-items:center;justify-content:center;touch-action:none;
+  border-radius:12px;overflow:visible}
+.tbone-base-unit{position:relative;width:82%;height:66px;flex-shrink:0}
+.tbone-inner-tubes{position:absolute;top:11px;bottom:11px;left:0;right:0;
+  border-top:8px solid #bbb;border-bottom:8px solid #bbb;background:transparent;
+  z-index:1;box-shadow:inset 0 2px 3px rgba(255,255,255,.18),inset 0 -1px 2px rgba(0,0,0,.3)}
+.tbone-base-brass-cover{position:absolute;left:-32px;top:0;width:42px;height:100%;
+  background:linear-gradient(to bottom,#bf953f 0%,#fcf6ba 22%,#b38728 50%,#fbf5b7 78%,#aa771c 100%);
+  border-radius:4px 0 0 4px;z-index:3;box-shadow:-2px 0 8px rgba(0,0,0,.5)}
+.tbone-outer-slide{position:absolute;inset:0;z-index:4;will-change:transform;cursor:grab}
+.tbone-outer-slide:active{cursor:grabbing}
+.tbone-u-pipe{position:absolute;inset:0;
+  border-top:10px solid #c9a227;border-bottom:10px solid #c9a227;
+  border-right:13px solid #c9a227;border-left:none;border-radius:0 48px 48px 0;
+  background:linear-gradient(to bottom,#bf953f 0%,#fcf6ba 22%,#b38728 50%,#fbf5b7 78%,#aa771c 100%);
+  box-sizing:border-box;box-shadow:4px 0 16px rgba(0,0,0,.45),inset 0 1px 2px rgba(255,255,255,.25)}
+.tbone-u-pipe::after{content:'';position:absolute;inset:0;background:#08080e;
+  margin-left:-2px;border-radius:0 38px 38px 0}
+.tbone-handle-new{position:absolute;left:0;top:50%;transform:translateY(-50%);
+  width:14px;height:140%;
+  background:linear-gradient(to bottom,#bf953f 0%,#fcf6ba 22%,#b38728 50%,#fbf5b7 78%,#aa771c 100%);
+  border-radius:4px;box-shadow:3px 0 14px rgba(0,0,0,.65);z-index:6}
+.tbone-handle-col{position:absolute;inset:0;pointer-events:none;will-change:transform;
+  background:transparent!important;border:none!important;box-shadow:none!important}
+.tbone-pos-labels{
+  position:absolute;
+  top:4px;
+  left:0;
+  width:72%;          /* matches handle travel: baseUnit.offsetWidth * 0.72 */
+  display:flex;
+  justify-content:space-between;
+  z-index:20;
+  pointer-events:none;
+  color:#5a5a7a;
+  font-size:.6rem;
+  font-family:'Share Tech Mono',monospace;
+  padding:0 2px;
+}
+.tbone-inline-display{position:absolute;bottom:5px;left:50%;
+  transform:translateX(-50%);text-align:center;z-index:30;pointer-events:none;
+  white-space:nowrap;display:flex;flex-direction:column;align-items:center;gap:1px}
+.tbone-full-area.blowing .tbone-u-pipe{
+  filter:brightness(1.28) saturate(1.35);
+  box-shadow:4px 0 22px rgba(255,215,0,.55),0 0 12px rgba(212,160,23,.4)}
+.tbone-full-area.blowing .tbone-handle-new{box-shadow:3px 0 20px rgba(255,215,0,.7)}
+.tbone-inner-rails-container,.tbone-rail,.tbone-bend,.tbone-bend-arc,
+.tbone-bend-arc-shine,.tbone-handle-bar-real,.tbone-u-pipe-visual,
+.tbone-slide-instrument,.tbone-slide-handle-visual,.tbone-slide-shaft{display:none!important}
+.drum-header:hover{background:rgba(0,229,255,.04)}
+.drum-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;font-weight:700;white-space:nowrap;flex:1}
+.drum-header-controls{display:flex;align-items:center;gap:8px}
+.drum-sf-sel{background:#0a0e18;border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:.62rem;padding:3px 6px;font-family:'Share Tech Mono',monospace;max-width:140px}
+.drum-toggle{background:none;border:none;color:var(--dim);font-size:.9rem;cursor:pointer;padding:0;transition:transform .2s;line-height:1;flex-shrink:0}
+.drum-toggle.open{transform:rotate(180deg)}
+.drum-body{display:none;padding:12px 14px 16px}
+.drum-body.open{display:block}
+.drum-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.drum-pad{position:relative;border-radius:10px;border:1px solid var(--border);background:#0a0e18;
+  cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;
+  padding:10px 6px 8px;display:flex;flex-direction:column;align-items:center;gap:4px;
+  transition:all .08s;min-height:72px;justify-content:center}
+.drum-pad:active,.drum-pad.hitting{transform:scale(.93);filter:brightness(1.4)}
+.drum-pad-name{font-size:.72rem;font-family:'Share Tech Mono',monospace;color:var(--textbright);
+  text-align:center;font-weight:700;line-height:1.2;pointer-events:none}
+.drum-pad-note{font-size:.55rem;color:var(--dim);pointer-events:none}
+.drum-pad-vel{position:absolute;bottom:5px;right:7px;font-size:.5rem;color:var(--dim);pointer-events:none}
+
+/* ── Beat Sequencer ─────────────────────────────────────────── */
+.seq-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.seq-header{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px}
+.seq-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;flex-shrink:0}
+.seq-header-controls{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.seq-btn{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;letter-spacing:.1em;
+  padding:4px 12px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.seq-btn:hover:not(:disabled){border-color:var(--accent);color:var(--accent);background:rgba(0,229,255,.06)}
+.seq-btn:disabled{opacity:.3;cursor:default}
+.seq-start-btn{color:var(--accent2);border-color:var(--accent2)}
+.seq-start-btn:hover{background:rgba(255,64,96,.08) !important;box-shadow:var(--glow2)}
+.seq-start-btn.active{background:rgba(255,64,96,.15) !important;border-color:var(--accent2) !important;color:var(--accent2) !important;animation:blink .7s ease-in-out infinite}
+.seq-clear-all{color:var(--dim)}
+.seq-sep{width:1px;height:20px;background:var(--border);flex-shrink:0}
+.seq-lbl{font-size:.55rem;letter-spacing:.1em;color:var(--text);opacity:.45;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.seq-lbl input[type=checkbox]{accent-color:var(--accent);cursor:pointer}
+.seq-sel{background:#07070f;border:1px solid var(--border);color:var(--textbright);
+  font-family:'Share Tech Mono',monospace;font-size:.65rem;padding:3px 5px;border-radius:4px;outline:none;cursor:pointer}
+.seq-swing-sl{-webkit-appearance:none;height:4px;width:55px;
+  background:linear-gradient(to right,var(--accent3) 0%,var(--border) 0%);
+  border:none;border-radius:2px;outline:none;cursor:pointer}
+.seq-swing-sl::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--accent3);border-radius:50%;cursor:pointer}
+.seq-swing-val{font-family:'Orbitron',monospace;font-size:.55rem;color:var(--accent3);min-width:26px}
+
+/* Step position indicator */
+.seq-step-indicator{display:flex;gap:3px;padding:0 0 2px;min-height:6px}
+.seq-ind-dot{flex:1;height:4px;border-radius:2px;background:var(--border);transition:background .05s}
+.seq-ind-dot.active{background:var(--accent)}
+.seq-ind-dot.beat{background:var(--dim)}
+
+/* Rows */
+.seq-empty{font-size:.68rem;color:var(--text);opacity:.7;text-align:center;padding:10px 0;letter-spacing:.1em}
+.seq-rows{display:flex;flex-direction:column;gap:7px}
+.seq-row{display:flex;flex-direction:column;background:#07070f;border:1px solid var(--border);border-radius:10px;overflow:visible;transition:border-color .15s}
+.seq-row.seq-row-muted{opacity:.4}
+.seq-row:hover{border-color:var(--dim)}
+
+/* Top bar: color + preset + note + vel + mute + del */
+.seq-row-top{display:flex;align-items:center;gap:8px;padding:8px 10px 6px;border-bottom:1px solid rgba(255,255,255,.04)}
+.seq-row-color{width:9px;height:9px;border-radius:50%;flex-shrink:0;box-shadow:0 0 6px currentColor}
+.seq-row-preset{flex:1;min-width:0}
+.seq-row-note{background:#07070f;border:1px solid var(--border);color:var(--accent3);
+  font-family:'Share Tech Mono',monospace;font-size:.62rem;padding:4px 6px;
+  border-radius:5px;outline:none;cursor:pointer;width:155px;flex-shrink:0}
+.seq-row-vel-wrap{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.seq-row-vel-lbl{font-size:.52rem;color:var(--text);opacity:.4;letter-spacing:.1em}
+.seq-row-vel{-webkit-appearance:none;height:4px;width:60px;
+  background:linear-gradient(to right,var(--accent2) 80%,var(--border) 80%);
+  border:none;border-radius:2px;outline:none;cursor:pointer}
+.seq-row-vel::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;background:var(--accent2);border-radius:50%;cursor:pointer}
+.seq-row-mute{width:26px;height:26px;background:transparent;border:1px solid var(--border);
+  border-radius:5px;cursor:pointer;font-size:.7rem;color:var(--accent);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:all .12s}
+.seq-row-mute:hover{border-color:var(--accent)}
+.seq-row-mute.muted{color:var(--dim);border-color:var(--dim)}
+.seq-row-del{width:26px;height:26px;background:transparent;border:1px solid var(--border);
+  border-radius:5px;cursor:pointer;font-size:.7rem;color:var(--accent2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:all .12s}
+.seq-row-del:hover{border-color:var(--accent2)}
+
+/* Step grid row */
+.seq-row-bottom{padding:8px 10px 9px;overflow-x:auto}
+.seq-steps{display:flex;gap:4px;align-items:center}
+.seq-step{width:30px;height:36px;border-radius:5px;border:1px solid var(--border);
+  background:#0d0d1a;cursor:pointer;transition:background .07s,box-shadow .07s,transform .07s;
+  flex-shrink:0;position:relative}
+.seq-step:hover{border-color:var(--dim);background:#131320}
+.seq-step.on{background:var(--row-color,var(--accent));border-color:var(--row-color,var(--accent));box-shadow:0 0 7px var(--row-color,var(--accent))}
+.seq-step.beat1{border-top:3px solid rgba(255,255,255,.18)}
+.seq-step.beat1.on{border-top-color:rgba(255,255,255,.4)}
+.seq-step.playing{box-shadow:0 0 14px var(--row-color,var(--accent)),inset 0 0 8px rgba(255,255,255,.2) !important;transform:scaleY(1.1)}
+.seq-step-group-gap{margin-left:6px}
+
+/* PDF panel */
+.pdf-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.pdf-header{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.pdf-title{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;flex-shrink:0}
+.pdf-controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.pdf-btn{background:#07070f;border:1px solid var(--border);color:var(--accent);
+  font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.1em;
+  padding:5px 12px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap}
+.pdf-btn:hover{border-color:var(--accent);box-shadow:var(--glow);background:rgba(0,229,255,.06)}
+.pdf-btn:disabled{opacity:.3;cursor:default;pointer-events:none}
+.pdf-btn.danger{color:var(--accent2);border-color:var(--border)}
+.pdf-btn.danger:hover{border-color:var(--accent2);box-shadow:var(--glow2);background:rgba(255,64,96,.06)}
+.pdf-info{font-family:'Share Tech Mono',monospace;font-size:.65rem;color:var(--text);opacity:.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.pdf-page-nav{display:flex;align-items:center;gap:8px}
+.pdf-page-num{font-family:'Orbitron',monospace;font-size:.65rem;color:var(--accent3);min-width:60px;text-align:center}
+.pdf-drop-hint{font-size:.65rem;color:var(--text);opacity:.3;text-align:center;padding:6px 0;letter-spacing:.1em}
+
+/* PDF fullscreen overlay */
+.pdf-overlay{position:fixed;inset:0;background:#0a0a12;z-index:9999;display:none;flex-direction:column}
+.pdf-overlay.visible{display:flex}
+.pdf-overlay-bar{display:flex;align-items:center;gap:10px;padding:8px 14px;background:#07070f;border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.pdf-overlay-title{font-family:'Share Tech Mono',monospace;font-size:.7rem;color:var(--accent);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pdf-overlay-nav{display:flex;align-items:center;gap:8px}
+.pdf-nav-btn{background:#07070f;border:1px solid var(--border);color:var(--accent);
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;padding:4px 10px;
+  border-radius:5px;cursor:pointer;transition:all .12s}
+.pdf-nav-btn:hover{border-color:var(--accent);box-shadow:var(--glow)}
+.pdf-nav-btn:disabled{opacity:.3;cursor:default}
+.pdf-page-display{font-family:'Orbitron',monospace;font-size:.65rem;color:var(--accent3);min-width:70px;text-align:center}
+.pdf-close-btn{background:#07070f;border:1px solid var(--accent2);color:var(--accent2);
+  font-family:'Share Tech Mono',monospace;font-size:.68rem;padding:4px 12px;
+  border-radius:5px;cursor:pointer;transition:all .12s;white-space:nowrap}
+.pdf-close-btn:hover{background:rgba(255,64,96,.1);box-shadow:var(--glow2)}
+.pdf-zoom-ctrl{display:flex;align-items:center;gap:6px}
+.pdf-canvas-wrap{flex:1;overflow:auto;display:flex;align-items:flex-start;justify-content:center;padding:12px}
+#pdfCanvas{max-width:100%;box-shadow:0 4px 32px rgba(0,0,0,.6);border-radius:3px}
+
+.midi-panel{background:var(--panel);border:1px solid var(--border);border-radius:12px;
+  padding:14px 16px;display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.midi-section-label{font-size:.62rem;letter-spacing:.2em;color:var(--accent);text-transform:uppercase;width:100%;margin-bottom:-4px}
+.midi-badge{display:inline-flex;align-items:center;gap:6px;font-size:.65rem;
+  letter-spacing:.1em;padding:5px 10px;border-radius:20px;border:1px solid var(--border);
+  background:#07070f;color:var(--text);transition:all .2s;white-space:nowrap}
+.midi-badge.connected{border-color:var(--accent);color:var(--accent);box-shadow:var(--glow)}
+.midi-badge .mdot{width:7px;height:7px;border-radius:50%;background:var(--dim);flex-shrink:0}
+.midi-badge.connected .mdot{background:var(--accent);box-shadow:var(--glow);animation:pulse 2s ease-in-out infinite}
+.midi-badge.error-badge{border-color:var(--accent2);color:var(--accent2)}
+.midi-connect-btn{background:#07070f;border:1px solid var(--border);color:var(--accent);
+  font-family:'Share Tech Mono',monospace,Courier;font-size:.72rem;letter-spacing:.12em;
+  padding:7px 14px;border-radius:6px;cursor:pointer;transition:all .2s;white-space:nowrap}
+.midi-connect-btn:hover{border-color:var(--accent);box-shadow:var(--glow);background:rgba(0,229,255,.06)}
+.midi-device-list{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:1}
+.pitch-section{display:flex;align-items:center;gap:8px;font-size:.62rem;color:var(--accent3);opacity:.75;letter-spacing:.08em}
+.pitchbar-wrap{height:5px;background:var(--border);border-radius:3px;overflow:visible;width:70px;flex-shrink:0;position:relative}
+.pitchbar{position:absolute;height:100%;background:var(--accent3);border-radius:3px;
+  top:0;left:50%;width:0;transform-origin:left center;transition:width .04s,left .04s,background .08s}
+.pitchcenter{position:absolute;width:1px;height:130%;top:-15%;left:50%;background:var(--dim)}
+::-webkit-scrollbar{height:4px;background:var(--panel)}
+::-webkit-scrollbar-thumb{background:var(--accent3);border-radius:2px}
+@media(max-width:500px){.panel{flex-direction:column}.ps{min-width:100%}}
+
+/* ── Jump Navigation Bar ── */
+.jump-nav{position:sticky;top:0;z-index:200;
+  background:rgba(9,9,15,.96);
+  border-bottom:1px solid var(--border);
+  display:flex;align-items:center;
+  gap:5px;padding:6px 10px;
+  overflow-x:auto;scrollbar-width:none;
+  flex-shrink:0;backdrop-filter:blur(12px)}
+.jump-nav::-webkit-scrollbar{display:none}
+.jnav-btn{
+  flex-shrink:0;
+  background:#0d0d1a;
+  border:1.5px solid var(--border);
+  border-radius:8px;
+  color:var(--text);
+  font-family:'Share Tech Mono',monospace;
+  font-size:.72rem;
+  letter-spacing:.04em;
+  padding:7px 12px;
+  cursor:pointer;
+  transition:all .12s;
+  white-space:nowrap;
+  line-height:1;
+  display:flex;align-items:center;gap:5px;
+  -webkit-tap-highlight-color:transparent;
+  min-height:36px;
+}
+.jnav-icon{font-size:.95rem;line-height:1}
+.jnav-lbl{font-size:.65rem;letter-spacing:.05em}
+.jnav-btn:hover,.jnav-btn:active{
+  border-color:var(--accent);color:var(--accent);
+  background:rgba(0,229,255,.1)}
+.jnav-btn.active{
+  border-color:var(--accent);color:var(--accent);
+  background:rgba(0,229,255,.12);
+  box-shadow:0 0 8px rgba(0,229,255,.2)}
+
+
+/* ── Mega blow area — UNDER the trombone, fills remaining space ── */
+.tbone-mega-blow{
+  display:none;
+  width:100%;
+  border-radius:10px;
+  border:2px dashed #b8860b55;
+  background:#0a0800;
+  align-items:center;justify-content:center;
+  cursor:pointer;
+  user-select:none;-webkit-tap-highlight-color:transparent;
+  touch-action:none;
+  transition:all .12s;
+  min-height:60px;
+}
+.tbone-mega-blow.blowing,.tbone-mega-blow:active{
+  background:#1a1000;border-color:#ffd700;
+  box-shadow:0 0 18px rgba(255,215,0,.28)}
+.tbone-mega-blow-inner{
+  font-size:1.1rem;letter-spacing:.18em;color:#b8860b;pointer-events:none}
+.tbone-mega-blow.blowing .tbone-mega-blow-inner{color:#ffd700}
+
+/* Landscape: body fills viewport, mega-blow UNDER the instrument */
+@media (orientation: landscape) {
+  /* tbone-body is a column; mega-blow fills exact remaining height via JS */
+  .tbone-body.open{
+    flex-direction:column;
+    overflow:visible;
+    gap:6px;
+    padding-bottom:6px;
+  }
+  .tbone-blow-area{display:none!important}
+  .tbone-full-area{
+    height:130px !important;
+    flex-shrink:0;
+  }
+  /* Height set dynamically by JS — show as flex when in landscape */
+  .tbone-mega-blow.landscape-active{
+    display:flex !important;
+    flex-shrink:0;
+  }
+}
+@media (orientation: portrait) {
+  .tbone-mega-blow{display:none!important}
+}
+
+
+/* ═══ Live Jam Panel — Ensemble Edition ════════════════════════ */
+.jam-panel{background:var(--panel);border:1px solid var(--border);
+  border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.jam-header{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.jam-title{font-size:.62rem;letter-spacing:.2em;color:#69ff47;text-transform:uppercase;
+  font-weight:700;white-space:nowrap}
+.jam-status-wrap{display:flex;align-items:center;gap:6px}
+.jam-dot{width:9px;height:9px;border-radius:50%;background:var(--dim);flex-shrink:0;transition:all .3s}
+.jam-dot.connected{background:#69ff47;box-shadow:0 0 8px #69ff47;animation:pulse 2s ease-in-out infinite}
+.jam-dot.connecting{background:#ffb830;box-shadow:0 0 6px #ffb830;animation:blink .5s infinite}
+.jam-dot.error{background:var(--accent2)}
+.jam-status-txt{font-size:.62rem;color:var(--text);font-family:'Share Tech Mono',monospace}
+.jam-ping{font-size:.55rem;color:var(--dim);font-family:'Share Tech Mono',monospace}
+.jam-connect-row{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.jam-input{background:#07070f;border:1px solid var(--border);color:var(--textbright);
+  font-family:'Share Tech Mono',monospace;font-size:.75rem;padding:7px 10px;
+  border-radius:6px;outline:none;transition:border-color .15s;flex:1;min-width:120px}
+.jam-input:focus{border-color:#69ff47}
+.jam-btn{background:#07070f;border:1px solid var(--border);color:var(--text);
+  font-family:'Share Tech Mono',monospace;font-size:.68rem;letter-spacing:.08em;
+  padding:7px 12px;border-radius:6px;cursor:pointer;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.jam-btn:hover{border-color:#69ff47;color:#69ff47;background:rgba(105,255,71,.07)}
+.jam-btn-connect{border-color:#69ff47;color:#69ff47;background:rgba(105,255,71,.06)}
+.jam-btn-connect:hover{background:rgba(105,255,71,.15);box-shadow:0 0 10px rgba(105,255,71,.3)}
+.jam-btn-disconnect{border-color:var(--accent2);color:var(--accent2)}
+.jam-btn-disconnect:hover{background:rgba(255,64,96,.1)}
+/* Live section */
+.jam-live{display:flex;flex-direction:column;gap:10px}
+/* Mixer */
+.jam-mixer{display:flex;flex-direction:column;gap:6px}
+.jam-mixer-title{font-size:.55rem;letter-spacing:.16em;color:var(--dim);text-transform:uppercase}
+.jam-player-row{display:flex;align-items:center;gap:9px;background:#07070f;
+  border:1px solid var(--border);border-radius:9px;padding:8px 12px;transition:border-color .15s}
+.jam-player-row.playing{border-color:currentColor}
+@keyframes jam-flash{0%{opacity:1;transform:scale(1.04)}100%{opacity:1;transform:scale(1)}}
+.jam-player-row.flash{animation:jam-flash .18s ease-out}
+.jam-player-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+.jam-player-name{font-size:.72rem;font-family:'Share Tech Mono',monospace;
+  font-weight:700;flex-shrink:0;min-width:80px}
+/* Preset chips inside player row */
+.jam-player-presets{display:flex;flex-wrap:wrap;gap:4px;flex:1;min-width:0}
+.jam-preset-chip{font-size:.58rem;font-family:'Share Tech Mono',monospace;
+  padding:2px 7px;border-radius:10px;border:1px solid;white-space:nowrap;
+  opacity:.8;max-width:120px;overflow:hidden;text-overflow:ellipsis}
+.jam-preset-chip.matched{opacity:1;font-weight:700}
+.jam-preset-chip.unmatched{opacity:.45;font-style:italic}
+/* Volume + mute per player */
+.jam-player-vol{-webkit-appearance:none;height:4px;width:80px;flex-shrink:0;
+  border:none;border-radius:2px;outline:none;cursor:pointer}
+.jam-player-vol::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;
+  border-radius:50%;cursor:pointer}
+.jam-player-mute{background:none;border:1px solid var(--border);border-radius:5px;
+  color:var(--dim);font-size:.75rem;width:26px;height:26px;cursor:pointer;
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .12s;padding:0}
+.jam-player-mute:hover{border-color:var(--accent2);color:var(--accent2)}
+.jam-player-mute.muted{border-color:var(--accent2);color:var(--accent2);background:rgba(255,64,96,.1)}
+/* Chat */
+.jam-chat-wrap{display:flex;flex-direction:column;gap:5px}
+.jam-chat-log{background:#05050c;border:1px solid var(--border);border-radius:7px;
+  padding:8px 10px;max-height:80px;overflow-y:auto;font-size:.65rem;
+  font-family:'Share Tech Mono',monospace;display:flex;flex-direction:column;gap:3px;
+  scrollbar-width:thin;scrollbar-color:var(--dim) transparent}
+.jam-chat-line{color:var(--text);line-height:1.4}
+.jam-chat-line .jam-chat-who{font-weight:700}
+.jam-chat-line.system{color:var(--dim);font-style:italic}
+.jam-chat-input-row{display:flex;gap:6px}
+.jam-chat-input{flex:1;min-width:0}
+
+
+/* ── WebRTC Audio controls ──────────────────────────────────── */
+.jam-own-audio{display:flex;align-items:center;gap:8px;
+  background:#07070f;border:1px solid var(--border);border-radius:9px;
+  padding:8px 12px;flex-wrap:wrap}
+.jam-own-audio-title{font-size:.55rem;letter-spacing:.14em;color:var(--dim);
+  text-transform:uppercase;white-space:nowrap}
+.jam-mic-btn{background:#07070f;border:1px solid var(--border);border-radius:7px;
+  font-size:.95rem;width:38px;height:38px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all .15s;flex-shrink:0;padding:0}
+.jam-mic-btn.active{border-color:#69ff47;background:rgba(105,255,71,.1);
+  box-shadow:0 0 10px rgba(105,255,71,.3)}
+.jam-mic-btn.muted{border-color:var(--accent2);background:rgba(255,64,96,.08)}
+.jam-mic-btn:disabled{opacity:.3;cursor:default}
+.jam-vol-lbl{font-size:.55rem;color:var(--dim);white-space:nowrap}
+/* VU meter */
+.jam-vu-wrap{flex:1;min-width:60px;height:6px;background:var(--border);
+  border-radius:3px;overflow:hidden}
+.jam-vu-bar{height:100%;width:0%;border-radius:3px;transition:width .05s;
+  background:linear-gradient(to right,#69ff47,#ffb830,#ff4060)}
+/* Audio row additions */
+.jam-player-audio-vol{-webkit-appearance:none;height:4px;width:65px;flex-shrink:0;
+  border:none;border-radius:2px;outline:none;cursor:pointer;accent-color:#b388ff}
+.jam-audio-indicator{font-size:.7rem;flex-shrink:0;opacity:.3;transition:opacity .1s;line-height:1}
+.jam-audio-indicator.speaking{opacity:1}
+.jam-mixer-section{font-size:.52rem;letter-spacing:.12em;color:var(--dim);
+  text-transform:uppercase;margin-top:4px;margin-bottom:2px}
+
+/* ── ADSR Envelope Editor ───────────────────────────────────── */
+.adsr-panel{display:flex;flex-direction:column;gap:8px;margin-top:4px}
+.adsr-header-row{display:flex;align-items:center;gap:8px}
+.adsr-lbl{font-size:.5rem;letter-spacing:.1em;color:var(--text);opacity:.75;
+  text-transform:uppercase;white-space:nowrap}
+.adsr-reset-btn{background:none;border:1px solid var(--border);border-radius:5px;
+  color:var(--dim);font-size:.6rem;font-family:'Share Tech Mono',monospace;
+  padding:2px 8px;cursor:pointer;transition:all .12s}
+.adsr-reset-btn:hover{border-color:var(--accent2);color:var(--accent2)}
+/* SVG canvas */
+.adsr-svg-wrap{position:relative;width:100%;height:90px;
+  background:#07070f;border:1px solid var(--border);border-radius:8px;
+  overflow:visible;cursor:crosshair;touch-action:none}
+.adsr-svg{width:100%;height:100%;display:block}
+.adsr-path{fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.adsr-fill{opacity:.12}
+.adsr-handle{cursor:grab;transition:r .1s}
+.adsr-handle:hover,.adsr-handle.dragging{r:7}
+/* Sliders row */
+.adsr-sliders{display:flex;flex-wrap:wrap;gap:10px}
+.adsr-sl-item{display:flex;flex-direction:column;gap:3px;min-width:80px;flex:1}
+.adsr-sl-lbl{font-size:.55rem;letter-spacing:.1em;color:var(--dim);text-transform:uppercase}
+.adsr-sl-val{font-size:.62rem;font-family:'Orbitron',monospace;color:var(--accent);
+  text-align:right}
+.adsr-sl{-webkit-appearance:none;height:4px;width:100%;border-radius:2px;
+  border:none;outline:none;cursor:pointer}
+.adsr-sl::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+  border-radius:50%;cursor:pointer}
+</style>
+  <script type="module" crossorigin src="/assets/index-BGcnQK-X.js"></script>
+</head>
+<body>
+<div class="container">
+  <!-- Jump Navigation -->
+  <nav class="jump-nav" id="jumpNav">
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('ancSF2');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🗂</span><span class="jnav-lbl">SF2</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('midiPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🎹</span><span class="jnav-lbl">MIDI</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('ancFX');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🎛</span><span class="jnav-lbl">FX</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('jamPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🌐</span><span class="jnav-lbl">Jam</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('ancLayer');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🎵</span><span class="jnav-lbl">Layer</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('ancKeys');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">⌨</span><span class="jnav-lbl">Keys</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('metroPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">♩</span><span class="jnav-lbl">Metro</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('recPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">⏺</span><span class="jnav-lbl">Rec</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('tbonePanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🎺</span><span class="jnav-lbl">Posaune</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('drumPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🥁</span><span class="jnav-lbl">Drums</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('seqPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">⏏</span><span class="jnav-lbl">Seq</span></button>
+    <button class="jnav-btn" onclick="(()=>{const e=document.getElementById('pdfPanel');if(!e)return;const nav=document.getElementById('jumpNav');const off=nav?nav.offsetHeight+4:40;window.scrollTo({top:e.getBoundingClientRect().top+scrollY-off,behavior:'smooth'})})()"><span class="jnav-icon">🎼</span><span class="jnav-lbl">PDF</span></button>
+  </nav>
+
+  <div class="header">
+    <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
+    <h1>Ensemble</h1>
+    <div class="sub">Offline · Keine Abhängigkeiten</div>
+    <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel" id="settingsPanel" style="display:none">
+    <div class="settings-title">⚙ Erscheinungsbild</div>
+    <div class="settings-body">
+      <div class="settings-section-lbl">Themes</div>
+      <div class="settings-themes" id="settingsThemes"></div>
+      <div class="settings-section-lbl">Farben</div>
+      <div class="settings-colors" id="settingsColors"></div>
+      <div class="settings-section-lbl">Textgröße</div>
+      <div class="settings-sizes" id="settingsSizes"></div>
+      <div class="settings-section-lbl">Labels &amp; Lesbarkeit</div>
+      <div class="settings-sizes" id="settingsLabels"></div>
+
+      <div class="settings-footer">
+        <button class="settings-reset-btn" id="settingsResetBtn">↺ Zurücksetzen</button>
+      </div>
+    </div>
+  </div>
+
+
+  <div class="sf-loader-panel" id="ancSF2">
+      <div class="sf-loader-header">
+        <div class="sf-loader-title">🗂 Soundfonts</div>
+        <div class="mem-display" id="memDisplay" style="display:none"></div>
+        <button class="sf-add-btn" id="sfAddBtn">＋ SF2 laden</button>
+        <input type="file" id="fileInput" accept=".sf2" multiple style="display:none">
+      </div>
+      <div class="sf-list" id="sfList">
+        <div class="sf-empty" id="sfEmpty">Noch kein Soundfont geladen — „＋ SF2 laden" klicken oder Datei hierher ziehen</div>
+      </div>
+    </div>
+  
+  <div class="progress-wrap" id="progressWrap">
+      <div class="prog-label" id="progLabel">Parsing…</div>
+      <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+    </div>
+  
+  <!-- Session -->
+    <div class="session-panel" id="sessionPanel">
+      <div class="session-title">💾 Session</div>
+      <div class="session-controls">
+        <button class="session-btn" id="sessionSaveBtn">💾 Speichern</button>
+        <label  class="session-btn session-load-lbl">📂 Laden<input type="file" id="sessionLoadInput" accept=".json" style="display:none"></label>
+        <span class="session-info" id="sessionInfo">Layer-Konfiguration, Effekte &amp; Metronom werden gespeichert (ohne SF2-Dateien)</span>
+      </div>
+    </div>
+  
+  <!-- MIDI Panel -->
+    <div class="midi-panel" id="midiPanel">
+      <div class="midi-section-label">🎹 MIDI Input</div>
+      <button class="midi-connect-btn" id="midiConnectBtn">Zugriff anfragen</button>
+      <div class="midi-device-list" id="midiDeviceList">
+        <div class="midi-badge" id="midiStatusBadge"><div class="mdot"></div><span id="midiStatusText">Nicht verbunden</span></div>
+      </div>
+      <div class="pitch-section" id="pitchSection" style="display:none">
+        Pitch
+        <div class="pitchbar-wrap"><div class="pitchcenter"></div><div class="pitchbar" id="pitchBar"></div></div>
+      </div>
+    </div>
+  
+  <!-- Favorites Panel -->
+    <div class="fav-panel" id="favPanel">
+      <div class="fav-header">
+        <span class="fav-title">⭐ Favoriten</span>
+        <span class="fav-hint" id="favHint">Stern an einem Layer klicken zum Speichern</span>
+      </div>
+      <div class="fav-list" id="favList"></div>
+    </div>
+  
+  <!-- Register Panel -->
+    <div class="reg-panel" id="regPanel">
+      <div class="reg-header">
+        <span class="reg-title">🔵 Register</span>
+        <span class="reg-hint">Tippen = Laden &nbsp;·&nbsp; Lang halten = Speichern</span>
+      </div>
+      <div class="reg-row" id="regRow"></div>
+      <div class="reg-nav-row">
+        <button class="reg-nav-btn" id="regPrevBtn" title="Vorheriger Register">◀</button>
+        <div class="reg-nav-disp" id="regNavDisp">—</div>
+        <button class="reg-nav-btn" id="regNextBtn" title="Nächster Register">▶</button>
+        <div class="reg-nav-learn" id="regNavLearnWrap"></div>
+      </div>
+    </div>
+  
+  <!-- Layer List -->
+    <div class="layers-panel" id="ancLayer">
+      <div class="layers-header">
+        <div class="layers-title">🎵 Preset-Layer</div>
+        <button class="add-layer-btn" id="addLayerBtn" disabled>＋ Layer hinzufügen</button>
+      </div>
+      <div class="layer-list" id="layerList">
+        <div class="layer-empty" id="layerEmpty">Lade eine SF2-Datei um Layer hinzuzufügen</div>
+      </div>
+    </div>
+  
+  <!-- Effects Panel -->
+    <div class="drawbar-panel" id="drawbarPanel">
+      <div class="drawbar-header" id="drawbarHeader">
+        <span class="drawbar-title">🎛 Zugriegel</span>
+        <span class="drawbar-hint" id="drawbarHint">Tippen zum Stumm/Laut schalten</span>
+        <button class="drawbar-toggle" id="drawbarToggle">▾</button>
+      </div>
+      <div class="drawbar-body" id="drawbarBody">
+        <div class="drawbar-row" id="drawbarRow"></div>
+      </div>
+    </div>
+  
+  <div class="viz" id="viz"></div>
+  
+  <!-- Chord Panel -->
+  <div class="chord-panel" id="chordPanel">
+    <div class="chord-header" id="chordHeader">
+      <span class="chord-title">🎼 Akkorde</span>
+      <span class="chord-hint" id="chordHint">Tippen zum Anzeigen auf der Klaviatur</span>
+      <button class="chord-toggle" id="chordToggle">▾</button>
+    </div>
+    <div class="chord-body" id="chordBody">
+      <div class="chord-root-row" id="chordRootRow"></div>
+      <div class="chord-type-row" id="chordTypeRow"></div>
+      <div style="display:flex;justify-content:flex-end">
+        <button class="chord-sel-btn" id="chordClearBtn" style="color:#ff4060;border-color:#ff406055">✕ Auswahl löschen</button>
+      </div>
+      <div class="chord-display" id="chordDisplay"></div>
+    </div>
+  </div>
+
+  <div class="kb-wrap" id="ancKeys">
+    <div class="kb-header">
+      <span>Klaviatur</span>
+      <div class="kb-nav">
+        <button class="kb-nav-btn" id="kbLeft" title="Nach links">◀</button>
+        <button class="kb-nav-btn" id="kbRight" title="Nach rechts">▶</button>
+      </div>
+    </div>
+    <div class="kb-scroll" id="kbScroll">
+      <div class="keyboard" id="keyboard"></div>
+    </div>
+    </div>
+  
+  <div class="shortcuts" id="shortcuts"></div>
+
+    <div class="fx-panel" id="ancFX">
+      <div class="fx-title-row">
+        <div class="fx-title">🎛 Effekte &amp; EQ</div>
+        <button class="fx-lock-btn" id="fxLockBtn" title="Slider sperren">🔓</button>
+      </div>
+      <div class="fx-slider-row" id="fxSliders"></div>
+      <div class="fx-divider"></div>
+      <div class="fx-row" id="fxToggles"></div>
+      <div class="fx-divider"></div>
+      <div class="fx-row" style="flex-wrap:wrap;gap:6px;align-items:center">
+        <span style="font-size:.55rem;letter-spacing:.12em;color:var(--accent);text-transform:uppercase;flex-shrink:0">🎬 Cinematic:</span>
+        <div id="fxCinematicBtns" style="display:flex;flex-wrap:wrap;gap:6px"></div>
+      </div>
+    </div>
+  
+  <!-- Drawbar Panel -->
+  
+  <div class="panel">
+      <div class="ps" style="max-width:180px">
+        <label>Master-Lautstärke</label>
+        <input type="range" id="volSlider" min="0" max="100" value="75">
+      </div>
+      <div class="ps" style="max-width:160px">
+        <label>Oktave</label>
+        <div class="octave-ctrl">
+          <button class="oct-btn" id="octDown">−</button>
+          <div class="oct-disp" id="octDisp">4</div>
+          <button class="oct-btn" id="octUp">+</button>
+        </div>
+      </div>
+      <div class="ps" style="max-width:160px">
+        <label>Transpose</label>
+        <div class="octave-ctrl">
+          <button class="oct-btn" id="trGlobDown">−</button>
+          <div class="oct-disp" id="trGlobDisp">+0</div>
+          <button class="oct-btn" id="trGlobUp">+</button>
+        </div>
+      </div>
+      <div class="ps" style="max-width:100px">
+        <label>&nbsp;</label>
+        <button id="panicBtn" title="Alle Töne sofort stoppen (Leertaste)">■ PANIC</button>
+      </div>
+      <div class="ps" style="max-width:160px">
+        <label>Alle Layer Velocity</label>
+        <div style="display:flex;gap:4px">
+          <button id="globalVelSoftBtn" title="Alle Layer: Soft Velocity (50)" style="flex:1;padding:5px 0;background:#07070f;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:.7rem;font-family:'Share Tech Mono',monospace;font-weight:700;color:var(--dim);transition:all .15s">p</button>
+          <button id="globalVelHardBtn" title="Alle Layer: Hard Velocity (127)" style="flex:1;padding:5px 0;background:#07070f;border:1px solid var(--border);border-radius:6px;cursor:pointer;font-size:.7rem;font-family:'Share Tech Mono',monospace;font-weight:700;color:var(--dim);transition:all .15s">ff</button>
+        </div>
+      </div>
+      <div class="ps" style="max-width:220px">
+        <label>Status</label>
+        <div class="status-bar"><div class="sdot" id="sdot"></div><span id="stext">Bereit</span></div>
+      </div>
+    </div>
+  
+  <!-- Metronome Panel -->
+    <div class="metro-panel" id="metroPanel" data-anc="ancMetro">
+      <div class="metro-header">
+        <div class="metro-title">♩ Metronom</div>
+        <div class="metro-controls">
+          <button class="metro-btn metro-start" id="metroStartBtn">▶ START</button>
+          <input type="range" class="metro-bpm-slider" id="metroBpmSlider" min="30" max="300" value="120">
+          <div class="metro-sep"></div>
+          <div class="metro-bpm-wrap">
+            <button class="metro-tap" id="metroTapBtn" title="Tap Tempo">TAP</button>
+            <button class="metro-nudge" id="metroBpmDown">−</button>
+            <div class="metro-bpm-display">
+              <div class="metro-bpm-val" id="metroBpmVal">120</div>
+              <div class="metro-bpm-lbl">BPM</div>
+            </div>
+            <button class="metro-nudge" id="metroBpmUp">+</button>
+          </div>
+          <div class="metro-sep"></div>
+          <div class="metro-sig-wrap">
+            <span class="metro-sig-lbl">Takt</span>
+            <select class="metro-sig-sel" id="metroSigSel">
+              <option value="2">2/4</option>
+              <option value="3">3/4</option>
+              <option value="4" selected>4/4</option>
+              <option value="6">6/8</option>
+              <option value="5">5/4</option>
+              <option value="7">7/8</option>
+            </select>
+          </div>
+          <div class="metro-sep"></div>
+          <div class="metro-vol-wrap">
+            <span class="metro-sig-lbl">Laut.</span>
+            <input type="range" class="metro-vol-slider" id="metroVolSlider" min="0" max="100" value="80">
+          </div>
+          <button class="metro-btn" id="metroMuteBtn" title="Ton stummschalten">🔊</button>
+        </div>
+      </div>
+      <div class="metro-beat-row" id="metroBeatRow"></div>
+    </div>
+  
+  <!-- Recorder Panel -->
+    <div class="rec-panel" id="recPanel" data-anc="ancRec">
+      <div class="rec-header">
+        <div class="rec-title">⏺ Aufnahme</div>
+        <div class="rec-controls">
+          <button class="rec-btn rec-record" id="recRecordBtn" title="Aufnahme starten/stoppen">⏺ REC</button>
+          <button class="rec-btn rec-overdub" id="recOverdubBtn" title="Overdub: neue Noten über bestehende aufnehmen" disabled>⊕ OVERDUB</button>
+          <button class="rec-btn rec-play"   id="recPlayBtn"   title="Abspielen" disabled>▶ PLAY</button>
+          <button class="rec-btn rec-stop"   id="recStopBtn"   title="Stoppen"   disabled>■ STOP</button>
+          <button class="rec-btn rec-loop"   id="recLoopBtn"   title="Loop">↻ LOOP</button>
+          <div class="rec-sep"></div>
+          <button class="rec-btn rec-save"   id="recSaveBtn"   title="Aufnahme als JSON speichern" disabled>💾 JSON</button>
+          <button class="rec-btn rec-midi"   id="recMidiBtn"   title="Als MIDI-Datei exportieren"  disabled>🎼 MIDI</button>
+          <button class="rec-btn" id="recWavBtn" title="Als WAV-Datei rendern und herunterladen" disabled style="color:#69ff47;border-color:#69ff4755">🔊 WAV</button>
+          <label class="rec-btn rec-load-lbl" title="Aufnahme laden">📂 JSON<input type="file" id="recLoadInput" accept=".json" style="display:none"></label>
+          <label class="rec-btn rec-load-lbl" title="MIDI-Datei laden" style="color:#9b7fe8;border-color:#9b7fe8">🎼 MIDI laden<input type="file" id="recMidiLoadInput" accept=".mid,.midi" style="display:none"></label>
+          <button class="rec-btn rec-clear"  id="recClearBtn"  title="Aufnahme löschen" disabled>✕ Löschen</button>
+        </div>
+      </div>
+      <div class="rec-status-row">
+        <div class="rec-indicator" id="recIndicator"></div>
+        <div class="rec-time"      id="recTime">0:00.0</div>
+        <div class="rec-info"      id="recInfo">Keine Aufnahme</div>
+        <div class="rec-progress-wrap"><div class="rec-progress-bar" id="recProgressBar" style="width:0%"></div></div>
+      </div>
+    </div>
+  
+  <!-- Beat Sequencer -->
+  <!-- Looper Keyboard -->
+  <!-- Looper Zugriegel -->
+  <div class="drawbar-panel" id="drawbarPanel2">
+    <div class="drawbar-header" id="drawbarHeader2">
+      <span class="drawbar-title">🎛 Zugriegel</span>
+      <span class="drawbar-hint">Tippen zum Stumm/Laut schalten</span>
+      <button class="drawbar-toggle" id="drawbarToggle2">▾</button>
+    </div>
+    <div class="drawbar-body" id="drawbarBody2">
+      <div class="drawbar-row" id="drawbarRow2"></div>
+    </div>
+  </div>
+
+  <!-- Looper Keyboard -->
+  <div class="kb-wrap" id="kbWrap2">
+    <div class="kb-header">
+      <span>Klaviatur</span>
+      <div class="kb-nav">
+        <button class="kb-nav-btn" id="kbLeft2" title="Nach links">◀</button>
+        <button class="kb-nav-btn" id="kbRight2" title="Nach rechts">▶</button>
+        <button class="kb-nav-btn" id="kbFullscreen2" title="Manual-Modus: Klaviatur füllt Display" style="font-size:.65rem;width:auto;padding:0 8px;white-space:nowrap">⛶ Manual</button>
+      </div>
+    </div>
+    <div class="kb-scroll" id="kbScroll2">
+      <div class="keyboard" id="keyboard2"></div>
+    </div>
+  </div>
+
+  <!-- Beat Sequencer -->
+  <!-- Trombone Panel -->
+  <div class="tbone-panel" id="tbonePanel">
+    <div class="tbone-header" id="tboneHeader">
+      <span class="tbone-title">🎺 Zugposaune</span>
+      <div class="tbone-header-controls">
+        <select class="tbone-layer-sel" id="tboneLayerSel" title="Layer für Posaune"></select>
+        <button class="tbone-gyro-btn" id="tboneGyroBtn" title="Gyroscope für Naturtonreihe">🔄 Gyro</button>
+        <button class="tbone-gyro-btn" id="tboneBuzzBtn" title="Lip Buzz — velocity-abhängige Lippenverzerrung">🎺 Buzz</button>
+        <button class="tbone-gyro-btn" id="tboneFullscreenBtn" title="Vollbild">⛶</button>
+
+        <button class="tbone-toggle" id="tboneToggle">▾</button>
+      </div>
+    </div>
+    <div class="tbone-body open" id="tboneBody">
+      <!-- hidden input kept so tboneGetHandleW() doesn't break -->
+      <input type="range" id="tboneHandleW" min="30" max="140" value="56" style="display:none">
+      <!-- Blow area removed — mega-blow below is the only blow zone -->
+      <!-- Full play area -->
+      
+
+<div class="tbone-full-area" id="tboneFullArea">
+  <!-- Scroll strips: touch here to scroll the page even when trombone is open -->
+  <div class="tbone-scroll-strip left"  id="tboneScrollL"></div>
+  <div class="tbone-scroll-strip right" id="tboneScrollR"></div>
+  <div class="tbone-base-unit">
+    <div class="tbone-pos-labels">
+      <span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6</span><span>7</span>
+    </div>
+    <div class="tbone-base-brass-cover"></div>
+    <div class="tbone-inner-tubes"></div>
+    <div class="tbone-handle-col tbone-outer-slide" id="tboneHandleCol">
+      <div class="tbone-handle-new"></div>
+      <div class="tbone-u-pipe"></div>
+    </div>
+  </div>
+
+  <div class="tbone-inline-display">
+    <div class="tbone-note-display" id="tboneNoteDisplay">—</div>
+    <div class="tbone-partial-display" id="tbonePartialDisplay">—</div>
+  </div>
+</div>
+
+  <!-- Mega blow area — fills landscape gap, invisible on portrait -->
+  <div class="tbone-mega-blow" id="tbone-megaBlow">
+    <div class="tbone-mega-blow-inner">💨 BLASEN</div>
+  </div>
+
+  <!-- Drum Pads -->
+  <div class="drum-panel" id="drumPanel">
+    <div class="drum-header" id="drumHeader">
+      <span class="drum-title">🥁 Drum Pads</span>
+      <div class="drum-header-controls">
+        <select class="drum-sf-sel" id="drumSfSel" title="SF2 für Drums"></select>
+        <button class="drum-toggle" id="drumToggle">▾</button>
+      </div>
+    </div>
+    <div class="drum-body" id="drumBody">
+      <div class="drum-grid" id="drumGrid"></div>
+    </div>
+  </div>
+
+  <!-- Beat Sequencer -->
+    <div class="seq-panel" id="seqPanel">
+      <div class="seq-header">
+        <div class="seq-title">🥁 Beat Sequencer</div>
+        <div class="seq-header-controls">
+          <button class="seq-btn seq-start-btn" id="seqStartBtn">▶ START</button>
+          <button class="seq-btn" id="seqAddRowBtn" disabled>＋ Zeile</button>
+          <div class="seq-sep"></div>
+          <label class="seq-lbl">Steps</label>
+          <select class="seq-sel" id="seqStepsSel">
+            <option value="8">8</option>
+            <option value="16" selected>16</option>
+            <option value="32">32</option>
+          </select>
+          <label class="seq-lbl">Swing</label>
+          <input type="range" class="seq-swing-sl" id="seqSwingSl" min="0" max="100" value="0">
+          <span class="seq-swing-val" id="seqSwingVal">0%</span>
+          <div class="seq-sep"></div>
+          <label class="seq-lbl" title="BPM mit Metronom synchronisieren">
+            <input type="checkbox" id="seqSyncChk" checked> Sync
+          </label>
+          <button class="seq-btn seq-clear-all" id="seqClearAllBtn">✕ Alles</button>
+        </div>
+      </div>
+      <div class="seq-step-indicator" id="seqStepIndicator"></div>
+      <div class="seq-rows" id="seqRows">
+        <div class="seq-empty" id="seqEmpty">SF2 laden und „＋ Zeile" klicken</div>
+      </div>
+    </div>
+  
+  <!-- PDF Panel -->
+    <div class="pdf-panel" id="pdfPanel">
+      <div class="pdf-header">
+        <div class="pdf-title">🎼 Noten (PDF)</div>
+        <div class="pdf-controls">
+          <span class="pdf-info" id="pdfInfo">Kein PDF geladen</span>
+          <button class="pdf-btn" id="pdfLoadBtn">📂 PDF laden</button>
+          <button class="pdf-btn" id="pdfFullBtn" disabled>⛶ Vollbild</button>
+          <button class="pdf-btn danger" id="pdfClearBtn" style="display:none">✕ Entfernen</button>
+          <input type="file" id="pdfInput" accept=".pdf" style="display:none">
+        </div>
+      </div>
+      <div class="pdf-drop-hint" id="pdfDropHint">PDF hierher ziehen oder „PDF laden" klicken</div>
+    </div>
+  
+  <!-- PDF Fullscreen Overlay -->
+    <div class="pdf-overlay" id="pdfOverlay">
+      <div class="pdf-overlay-bar">
+        <div class="pdf-overlay-title" id="pdfOverlayTitle">—</div>
+        <div class="pdf-overlay-nav">
+          <button class="pdf-nav-btn" id="pdfPrevBtn">◀</button>
+          <div class="pdf-page-display" id="pdfPageDisplay">— / —</div>
+          <button class="pdf-nav-btn" id="pdfNextBtn">▶</button>
+        </div>
+        <div class="pdf-zoom-ctrl">
+          <button class="pdf-nav-btn" id="pdfZoomOut">－</button>
+          <span style="font-family:'Orbitron',monospace;font-size:.6rem;color:var(--accent3);min-width:40px;text-align:center" id="pdfZoomLbl">100%</span>
+          <button class="pdf-nav-btn" id="pdfZoomIn">＋</button>
+          <button class="pdf-nav-btn" id="pdfZoomFit">⊡ Fit</button>
+        </div>
+        <button class="pdf-close-btn" id="pdfCloseBtn">✕ Schließen</button>
+      </div>
+      <div class="pdf-canvas-wrap" id="pdfCanvasWrap">
+        <canvas id="pdfCanvas"></canvas>
+      </div>
+    </div>
+
+  <!-- ══ Live Jam Panel — Ensemble Edition ══ -->
+  <div class="jam-panel" id="jamPanel">
+    <div class="jam-header">
+      <span class="jam-title">🌐 Live Jam</span>
+      <div class="jam-status-wrap">
+        <div class="jam-dot" id="jamDot"></div>
+        <span class="jam-status-txt" id="jamStatusTxt">Nicht verbunden</span>
+        <span class="jam-ping" id="jamPing"></span>
+      </div>
+    </div>
+
+    <div class="jam-connect-row" id="jamConnectRow">
+      <input class="jam-input" id="jamName"   placeholder="Dein Name" maxlength="24">
+      <input class="jam-input" id="jamServer" placeholder="wss://XXXXX.lhr.life  oder  ws://192.168.X.X:8765" value="ws://localhost:8765">
+      <button class="jam-btn jam-btn-connect" id="jamConnectBtn">🔌 Verbinden</button>
+    </div>
+    <div style="font-size:.58rem;color:var(--dim);font-family:'Share Tech Mono',monospace;line-height:1.6">
+      🌍 Internet: <code style="color:var(--accent)">ssh -R 80:localhost:8765 <a href="/cdn-cgi/l/email-protection" class="__cf_email__" data-cfemail="e58b8a8e809ca5898a8684898d8a9691cb97908b">[email&#160;protected]</a></code>
+      → gibt <code style="color:#69ff47">wss://XXXXX.lhr.life</code> aus
+    </div>
+
+    <div class="jam-live" id="jamLive" style="display:none">
+      <!-- Own microphone controls -->
+      <div class="jam-own-audio" id="jamOwnAudio">
+        <span class="jam-own-audio-title">🎙 Mein Mikrofon</span>
+        <select class="jam-input" id="jamAudioMode" style="flex:0 0 auto;width:auto;padding:4px 8px;font-size:.65rem">
+          <option value="voice">🎤 Gesang/Headset</option>
+          <option value="instrument">🎸 Instrument/Line-In</option>
+        </select>
+        <button class="jam-mic-btn" id="jamMicBtn" disabled title="Mikrofon einschalten">🎙</button>
+        <div class="jam-vu-wrap"><div class="jam-vu-bar" id="jamVuBar"></div></div>
+        <button class="jam-mic-btn" id="jamMicMuteBtn" disabled title="Mikrofon stummschalten">🔇</button>
+      </div>
+
+      <!-- Mixer: one row per remote player -->
+      <div class="jam-mixer">
+        <div class="jam-mixer-title">🎛 Mitspieler-Mixer</div>
+        <div id="jamMixer"></div>
+      </div>
+      <!-- Chat -->
+      <div class="jam-chat-wrap">
+        <div class="jam-chat-log" id="jamChatLog"></div>
+        <div class="jam-chat-input-row">
+          <input class="jam-input jam-chat-input" id="jamChatInput" placeholder="Nachricht…" maxlength="200">
+          <button class="jam-btn" id="jamChatSendBtn">➤</button>
+          <button class="jam-btn jam-btn-disconnect" id="jamDisconnectBtn">✕ Trennen</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="info-box">
+    <b>Tipp:</b> Lade eine lokale <b>.sf2-Datei</b> – alles läuft im Browser, nichts wird hochgeladen.<br>
+    Kostenlose SF2: <b>FluidR3_GM</b>, <b>GeneralUser GS</b> (Google: "free sf2 soundfont download")
+  </div>
+</div>
+alert("Script startet");
+
+</body>
+</html>
