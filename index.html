@@ -1967,13 +1967,16 @@ async ensureCtx() {
 
     onProgress('SpessaSynth lädt SF2…', 40);
 
-    // SpessaSynth v3: laden über soundBankManager
+    // SpessaSynth v3: laden über soundfontManager.addNewSoundFont
     try {
-      if (this.synth.soundBankManager) {
-        await this.synth.soundBankManager.addSoundBank(arrayBuffer, name);
-        console.log("soundBankManager OK, Methoden:", Object.getOwnPropertyNames(Object.getPrototypeOf(this.synth.soundBankManager)).join(', '));
+      if (this.synth.soundfontManager) {
+        const sfId = `sf_${Date.now()}`;
+        await this.synth.soundfontManager.addNewSoundFont(arrayBuffer, sfId);
+        // v3: warten bis presetList befüllt ist
+        await this.synth.isReady;
+        console.log("soundfontManager.addNewSoundFont OK, presetList:", this.synth.presetList?.length);
       } else {
-        throw new Error('soundBankManager nicht gefunden – pruefe SpessaSynth-Version');
+        throw new Error('soundfontManager nicht gefunden – pruefe SpessaSynth-Version');
       }
     } catch(e) {
       throw new Error('SF2 Ladefehler: ' + e.message);
@@ -2003,12 +2006,12 @@ async ensureCtx() {
   // Build preset list in our format from SpessaSynth v3
   _buildPresetList() {
     try {
-      // v3: presets sitzen im soundBankManager
-      const rawPresets = this.synth.soundBankManager?.getPresetList?.() ?? [];
+      const rawPresets = this.synth.presetList ?? [];
+      console.log("presetList Länge:", rawPresets.length);
       return rawPresets.map((p, i) => ({
-        name:    p.presetName ?? p.name ?? ('Preset ' + i),
-        program: p.preset    ?? p.program ?? i,
-        bank:    p.bank      ?? 0,
+        name:    p.presetName ?? ('Preset ' + i),
+        program: p.program    ?? i,
+        bank:    p.bank       ?? 0,
         zones:   [],
       }));
     } catch(e) {
