@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ensemble</title>
+<title>Ensemble_v1</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble</h1>
+    <h1>Ensemble_v1</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1452,11 +1452,9 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
     Kostenlose SF2: <b>FluidR3_GM</b>, <b>GeneralUser GS</b> (Google: "free sf2 soundfont download")
   </div>
 </div>
-alert("Script startet");
 
 <script type="module">
 import { Synthetizer } from "spessasynth_lib";
-alert("Script startet");
 
 // --- MOBILE DEBUGGER ---
 const debugDiv = document.createElement('div');
@@ -1969,9 +1967,14 @@ async ensureCtx() {
 
     onProgress('SpessaSynth lädt SF2…', 40);
 
-    // Add soundfont via SpessaSynth's loadSoundfont API
+    // SpessaSynth v3: laden über soundBankManager
     try {
-      await this.synth.loadSoundfont(new Uint8Array(arrayBuffer));
+      if (this.synth.soundBankManager) {
+        await this.synth.soundBankManager.addSoundBank(arrayBuffer, name);
+        console.log("soundBankManager OK, Methoden:", Object.getOwnPropertyNames(Object.getPrototypeOf(this.synth.soundBankManager)).join(', '));
+      } else {
+        throw new Error('soundBankManager nicht gefunden – pruefe SpessaSynth-Version');
+      }
     } catch(e) {
       throw new Error('SF2 Ladefehler: ' + e.message);
     }
@@ -1997,10 +2000,11 @@ async ensureCtx() {
     return { sfIdx, presets };
   }
 
-  // Build preset list in our format from SpessaSynth
+  // Build preset list in our format from SpessaSynth v3
   _buildPresetList() {
     try {
-      const rawPresets = this.synth.getPresetList?.() ?? [];
+      // v3: presets sitzen im soundBankManager
+      const rawPresets = this.synth.soundBankManager?.getPresetList?.() ?? [];
       return rawPresets.map((p, i) => ({
         name:    p.presetName ?? p.name ?? ('Preset ' + i),
         program: p.preset    ?? p.program ?? i,
@@ -2101,12 +2105,12 @@ async ensureCtx() {
     if (this._nextCh === 9) this._nextCh = 10;
     this._channels.set(key, ch);
 
-    // Set preset on this channel
+    // Set preset on this channel (v3)
     const sf = this.soundfonts[sfIdx];
     if (sf && sf.presets[presetIdx]) {
       const p = sf.presets[presetIdx];
       try {
-        if (p.bank) this.synth.controllerChange(ch, 0, p.bank); // bank select MSB
+        if (p.bank) this.synth.controllerChange(ch, 0, p.bank);
         this.synth.programChange(ch, p.program);
       } catch(e) { console.warn('programChange error:', e); }
     }
