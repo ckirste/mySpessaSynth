@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v6</h1>
+    <h1>Ensemble_v7</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -2133,30 +2133,30 @@ async ensureCtx() {
   setVol(v) {
     this._vol = v;
     if (this.masterGain) this.masterGain.gain.value = v;
-    if (this.synth) try { this.synth.setMasterVolume?.(v * 127); } catch(e) {}
+    if (this.synth) try { this.synth.setMainVolume(v); } catch(e) {}
   }
 
   setReverb(wet, size) {
     if (wet  !== undefined) this._reverbWet  = wet;
     if (size !== undefined) this._reverbSize = size;
-    if (!this.synth) return;
-    try {
-      // SpessaSynth reverb (0-1 range)
-      this.synth.setEffectsLevel?.('reverb', this._reverbWet);
-    } catch(e) {}
+    this._applyEffectsGain();
   }
 
   setChorus(wet) {
     this._chorusWet = wet;
-    if (!this.synth) return;
-    try { this.synth.setEffectsLevel?.('chorus', wet); } catch(e) {}
+    this._applyEffectsGain();
   }
 
-  setChorusRate(rate) { /* handled by SpessaSynth internally */ }
+  _applyEffectsGain() {
+    if (!this.synth) return;
+    try { this.synth.setEffectsGain(this._reverbWet, this._chorusWet); } catch(e) {}
+  }
+
+  setChorusRate(rate) { /* nicht in v3 extern steuerbar */ }
 
   setDelay(wet, time) {
     this._delayWet = wet ?? this._delayWet;
-    // SpessaSynth has no delay — silently ignore
+    // SpessaSynth v3 hat kein Delay — ignorieren
   }
 
   setEqLow(v)  { this._eqLow  = v; this._applyEQ(); }
@@ -2164,13 +2164,12 @@ async ensureCtx() {
   setEqHigh(v) { this._eqHigh = v; this._applyEQ(); }
 
   _applyEQ() {
-    // SpessaSynth doesn't expose EQ — could add BiquadFilters on masterGain
-    // For now silently ignore (or implement manually if needed)
+    // SpessaSynth v3 hat kein globales EQ — könnte man mit BiquadFiltern auf masterGain bauen
   }
 
-  setFilterFreq(freq, type) { /* no global filter in SpessaSynth */ }
-  setSaturation(v)          { /* per-layer saturation handled separately */ }
-  setWidth(v)               { /* stereo width not in SpessaSynth */ }
+  setFilterFreq(freq, type) { /* kein globaler Filter in SpessaSynth v3 */ }
+  setSaturation(v)          { /* nicht unterstützt */ }
+  setWidth(v)               { /* nicht unterstützt */ }
 
   // ── Compat stubs (UI calls these) ────────────────────────────
   async ensureAndGetStartT() {
