@@ -1977,9 +1977,6 @@ async ensureCtx() {
       } else {
         throw new Error('soundfontManager nicht gefunden');
       }
-      } else {
-        throw new Error('soundfontManager nicht gefunden – pruefe SpessaSynth-Version');
-      }
     } catch(e) {
       throw new Error('SF2 Ladefehler: ' + e.message);
     }
