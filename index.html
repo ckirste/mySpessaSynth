@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v1</h1>
+    <h1>Ensemble_v2</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1971,16 +1971,16 @@ async ensureCtx() {
     try {
       if (this.synth.soundfontManager) {
         const sfId = `sf_${Date.now()}`;
-        await this.synth.soundfontManager.addNewSoundFont(arrayBuffer, sfId);
-        // v3: kurz warten bis presetList befüllt ist (kein isReady — hängt nach addNewSoundFont)
-        await new Promise(resolve => {
-          const check = () => {
-            if (this.synth.presetList && this.synth.presetList.length > 0) resolve();
-            else setTimeout(check, 100);
-          };
-          setTimeout(check, 100);
+        // v3: auf presetlistchange-Event warten statt zu pollen
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('SF2 Timeout nach 30s')), 30000);
+          this.synth.eventHandler.addEvent('presetlistchange', `load-${sfId}`, () => {
+            clearTimeout(timeout);
+            resolve();
+          });
+          this.synth.soundfontManager.addNewSoundFont(arrayBuffer, sfId);
         });
-        console.log("soundfontManager.addNewSoundFont OK, presetList:", this.synth.presetList?.length);
+        console.log("SF2 geladen, presetList:", this.synth.presetList?.length);
       } else {
         throw new Error('soundfontManager nicht gefunden – pruefe SpessaSynth-Version');
       }
