@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v2</h1>
+    <h1>Ensemble_v4</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1930,27 +1930,16 @@ async ensureCtx() {
 
     if (!this._spessaReady) {
         try {
-            // 2. Das Worklet laden (Die Datei muss im /public Ordner liegen!)
-            // Da Vite den public-Inhalt nach / kopiert, ist der Pfad ganz einfach:
             await this.ctx.audioWorklet.addModule('./worklet_processor.min.js');
-
-            // 3. Synthetizer initialisieren (Moderne API)
-            // Wir starten mit einem leeren Buffer (Uint8Array(0))
-            this.synth = new Synthetizer(this.masterGain, new Uint8Array(0));
-
-            // v3: warten bis der Synth vollständig initialisiert ist
-            // BEVOR wir _spessaReady setzen — sonst Race-Condition mit addNewSoundFont
-            await this.synth.isReady;
-
+            // Synth wird NICHT hier erstellt — erst beim ersten SF2-Laden
+            // (new Uint8Array(0) löst kein isFullyInitialized aus → isReady hängt)
             this._spessaReady = true;
-            console.log("SpessaSynth Engine erfolgreich gestartet (Vite/Worklet Mode)");
+            console.log("SpessaSynth Worklet geladen, warte auf SF2…");
 
-            // 4. Evtl. wartende Effekte anwenden
-            if (window._pendingFxApply) { 
-                window._pendingFxApply(); 
-                window._pendingFxApply = null; 
+            if (window._pendingFxApply) {
+                window._pendingFxApply();
+                window._pendingFxApply = null;
             }
-
         } catch (e) {
             console.error('SpessaSynth Setup fehlgeschlagen:', e);
             throw new Error('Fehler beim Initialisieren der Audio-Engine.');
@@ -1973,10 +1962,19 @@ async ensureCtx() {
 
     // SpessaSynth v3: laden über soundfontManager.addNewSoundFont
     try {
-      if (this.synth.soundfontManager) {
+      if (!this.synth) {
+        // Erster SF2-Load: Synth mit echtem Buffer erstellen
+        this.synth = new Synthetizer(this.masterGain, arrayBuffer);
+        await this.synth.isReady;
+        console.log("SF2 geladen (init), presetList:", this.synth.presetList?.length);
+      } else if (this.synth.soundfontManager) {
+        // Weitere SF2s: addNewSoundFont
         const sfId = `sf_${Date.now()}`;
         await this.synth.soundfontManager.addNewSoundFont(arrayBuffer, sfId);
-        console.log("SF2 geladen, presetList:", this.synth.presetList?.length);
+        console.log("SF2 geladen (add), presetList:", this.synth.presetList?.length);
+      } else {
+        throw new Error('soundfontManager nicht gefunden');
+      }
       } else {
         throw new Error('soundfontManager nicht gefunden – pruefe SpessaSynth-Version');
       }
