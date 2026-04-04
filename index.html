@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v5</h1>
+    <h1>Ensemble_v6</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -3278,16 +3278,7 @@ function renderLayers() {
       // Ensure context running, then pre-decode + silent warm
       engine.ensureAndGetStartT().then(() => {
         engine.prewarmPreset(layer.sfIdx, idx);
-        // For large SF2s: re-run active-preset decode to pick up new preset
-        const sf = engine.soundfonts[layer.sfIdx];
-        if (sf) {
-          const sampleBytes = sf.parser.shdr.reduce((s,sh) => s + Math.max(0,(sh.end-sh.start))*2, 0);
-          if (sampleBytes / 1048576 > 50) {
-            engine.predecodeAll(layer.sfIdx, (done, total) => {
-              if (done >= total) { updateMemDisplay(); layers.forEach(l => engine._silentWarm(l.sfIdx, l.presetIdx)); }
-            });
-          }
-        }
+        // For large SF2s: SpessaSynth handles decoding internally
         updateMemDisplay();
       });
       // Remove focus from both fields
@@ -3886,18 +3877,8 @@ function setStatus(st,txt){document.getElementById('sdot').className='sdot '+st;
 function updateMemDisplay() {
   const el = document.getElementById('memDisplay');
   if (!el) return;
-  // Sum all SF2 raw data + decoded buffer cache estimates
-  let totalMB = 0;
-  engine.soundfonts.forEach(sf => {
-    // Raw parser data
-    const rawMB = sf.parser.raw.length / 1048576;
-    // Decoded float32 buffers (4 bytes per sample)
-    let cacheMB = 0;
-    sf.bufferCache.forEach(buf => { cacheMB += buf.length * 4 / 1048576; });
-    totalMB += rawMB + cacheMB;
-  });
-  if (totalMB < 1) { el.style.display = 'none'; return; }
-  el.style.display = '';
+  el.style.display = 'none'; // SpessaSynth verwaltet Speicher intern
+  return;
   el.textContent = `RAM ~${totalMB.toFixed(0)}MB`;
   el.className = 'mem-display' + (totalMB > 800 ? ' danger' : totalMB > 400 ? ' warn' : '');
 }
