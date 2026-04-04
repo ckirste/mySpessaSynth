@@ -1972,8 +1972,14 @@ async ensureCtx() {
       if (this.synth.soundfontManager) {
         const sfId = `sf_${Date.now()}`;
         await this.synth.soundfontManager.addNewSoundFont(arrayBuffer, sfId);
-        // v3: warten bis presetList befüllt ist
-        await this.synth.isReady;
+        // v3: kurz warten bis presetList befüllt ist (kein isReady — hängt nach addNewSoundFont)
+        await new Promise(resolve => {
+          const check = () => {
+            if (this.synth.presetList && this.synth.presetList.length > 0) resolve();
+            else setTimeout(check, 100);
+          };
+          setTimeout(check, 100);
+        });
         console.log("soundfontManager.addNewSoundFont OK, presetList:", this.synth.presetList?.length);
       } else {
         throw new Error('soundfontManager nicht gefunden – pruefe SpessaSynth-Version');
