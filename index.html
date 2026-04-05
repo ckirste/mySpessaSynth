@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v14</h1>
+    <h1>Ensemble_v15</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1454,7 +1454,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 </div>
 
 <script type="module">
-import { Synthetizer } from "spessasynth_lib";
+import { Synthetizer, Sequencer, audioBufferToWav } from "spessasynth_lib";
 
 // --- MOBILE DEBUGGER ---
 const debugDiv = document.createElement('div');
@@ -6759,89 +6759,114 @@ document.getElementById('recMidiBtn').addEventListener('click',  recExportMidi);
 async function recExportWav() {
   if (!rec.events.length || rec.state !== 'idle') return;
   const btn = document.getElementById('recWavBtn');
-  btn.textContent = '⏳ Aufnahme läuft…';
+  btn.textContent = '⏳ Rendert…';
   btn.disabled = true;
 
   try {
-    await engine.ensureCtx();
-    const ctx = engine.ctx;
+    // 1. Events → MIDI-Bytes (gleiche Logik wie recExportMidi)
+    const midiBytes = buildMidiBytes(rec.events, rec.duration);
 
-    // MediaStreamDestination am Ende der FX-Kette anzapfen
-    const dest = ctx.createMediaStreamDestination();
-    const srcNode = engine.filterNode ?? engine.masterGain;
-    srcNode.connect(dest);
+    // 2. SpessaSynth Offline-Render:
+    //    Sequencer mit MIDI laden → renderAudio() → AudioBuffer → WAV
+    const sampleRate = 44100;
 
-    const chunks = [];
-    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg']
-      .find(m => MediaRecorder.isTypeSupported(m)) || '';
-    const mr = new MediaRecorder(dest.stream, mimeType ? { mimeType } : {});
-    mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    // Sequencer an bestehenden Synth hängen
+    const seq = new Sequencer(engine.synth);
+    seq.loadNewSongList([midiBytes]);
 
-    // Recorder starten
-    mr.start(50);
+    // Warten bis MIDI geladen
+    await new Promise(r => setTimeout(r, 200));
 
-    // Kurz warten damit Recorder bereit ist
-    await new Promise(r => setTimeout(r, 100));
-
-    // Eigenen Playback-Loop ohne recPlay() — direkt Events feuern
-    const tailMs = 2500;
-    const totalMs = rec.duration + tailMs;
-    const startT = performance.now();
-
-    // Events selbst abspielen (ohne rec.state zu ändern)
-    const timers = [];
-    rec.events.forEach(ev => {
-      const tid = setTimeout(() => {
-        if (ev.type === 'on') {
-          getActiveLayers().forEach(layer => {
-            if (ev.midi < layer.keyLo || ev.midi > layer.keyHi) return;
-            const transposed = ev.midi + globalTranspose + (layer.transpose ?? 0);
-            if (transposed < 0 || transposed > 127) return;
-            engine.playSync(transposed, layer.id, layer.sfIdx, layer.presetIdx,
-              ev.vel ?? 80, layer.vol, ctx.currentTime + 0.01, layer.envOverride);
-          });
-        } else {
-          getActiveLayers().forEach(layer => {
-            engine._killAllVoicesForNote(layer.id, ev.midi + globalTranspose + (layer.transpose ?? 0));
-          });
-        }
-      }, ev.t);
-      timers.push(tid);
+    // renderAudio — schneller als Echtzeit, kein Lautsprecher
+    btn.textContent = '⏳ Offline-Render…';
+    const buffers = await engine.synth.renderAudio(sampleRate, {
+      enableEffects:   true,
+      extraTime:       3,    // Sekunden Nachhall am Ende
+      progressCallback: (p) => {
+        btn.textContent = `⏳ ${Math.round(p * 100)}%…`;
+      },
     });
 
-    // Warten bis Playback + Nachhall fertig
-    await new Promise(r => setTimeout(r, totalMs));
-    timers.forEach(t => clearTimeout(t));
-    engine.stopAll();
-
-    // MediaRecorder sauber stoppen und auf onstop warten
-    await new Promise(resolve => {
-      mr.onstop = resolve;
-      mr.stop();
+    // buffers = Array von AudioBuffers (dry + effects)
+    // Alle zusammenmischen
+    const totalLen = buffers[0].length;
+    const outBuf = new AudioBuffer({ sampleRate, numberOfChannels: 2, length: totalLen });
+    buffers.forEach(buf => {
+      for (let ch = 0; ch < 2; ch++) {
+        const out = outBuf.getChannelData(ch);
+        const src = buf.getChannelData(ch);
+        for (let i = 0; i < totalLen; i++) out[i] += src[i];
+      }
     });
 
-    srcNode.disconnect(dest);
-
-    if (!chunks.length) throw new Error('Keine Audio-Daten aufgenommen');
-
-    const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
-    const ext  = blob.type.includes('ogg') ? 'ogg' : 'webm';
-    const file = new File([blob], `ensemble_export.${ext}`, { type: blob.type });
+    // 3. AudioBuffer → WAV
+    btn.textContent = '⏳ Encodiert…';
+    const wavBuffer = audioBufferToWav(outBuf);
+    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
+    const file = new File([blob], 'ensemble_export.wav', { type: 'audio/wav' });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: 'Ensemble Export' }); }
-      catch(e) { if (e.name !== 'AbortError') fallbackDownload(blob, ext); }
+      catch(e) { if (e.name !== 'AbortError') fallbackDownload(blob, 'wav'); }
     } else {
-      fallbackDownload(blob, ext);
+      fallbackDownload(blob, 'wav');
     }
 
   } catch(e) {
     console.error('WAV export error:', e);
-    alert('Fehler beim Aufnehmen: ' + e.message);
+    alert('Fehler beim Rendern: ' + e.message);
   } finally {
     btn.textContent = '🔊 WAV';
     btn.disabled = false;
+    // Lautsprecher wiederherstellen falls nötig
+    try {
+      engine.filterNode.connect(engine.ctx.destination);
+    } catch(e) {}
   }
+}
+
+// MIDI-Bytes aus Events bauen (extrahiert aus recExportMidi)
+function buildMidiBytes(events, duration) {
+  const TICKS = 480, BPM = 120;
+  const US_PER_BEAT = Math.round(60000000 / BPM);
+  const MS_PER_TICK = US_PER_BEAT / 1000 / TICKS;
+
+  function vlq(v) {
+    v = Math.max(0, v);
+    if (v < 128) return [v];
+    const b = [];
+    b.unshift(v & 127); v >>= 7;
+    while (v > 0) { b.unshift(v & 127 | 128); v >>= 7; }
+    return b;
+  }
+
+  const sorted = [...events].sort((a,b) => a.t - b.t);
+  const track = [];
+  let lastTick = 0;
+
+  // Tempo
+  track.push(0, 0xFF, 0x51, 3,
+    (US_PER_BEAT >> 16) & 0xFF,
+    (US_PER_BEAT >>  8) & 0xFF,
+     US_PER_BEAT        & 0xFF);
+
+  for (const ev of sorted) {
+    const tick  = Math.max(0, Math.round(ev.t / MS_PER_TICK));
+    const delta = tick - lastTick;
+    lastTick = tick;
+    track.push(...vlq(delta));
+    if (ev.type === 'on')
+      track.push(0x90, ev.midi & 127, (ev.vel || 100) & 127);
+    else
+      track.push(0x80, ev.midi & 127, 64);
+  }
+  track.push(0, 0xFF, 0x2F, 0); // End of Track
+
+  const u32 = v => [v>>24&255, v>>16&255, v>>8&255, v&255];
+  const u16 = v => [v>>8&255, v&255];
+  const header = [0x4D,0x54,0x68,0x64, ...u32(6), ...u16(0), ...u16(1), ...u16(TICKS)];
+  const trkHdr = [0x4D,0x54,0x72,0x6B, ...u32(track.length)];
+  return new Uint8Array([...header, ...trkHdr, ...track]).buffer;
 }
 
 
@@ -6852,29 +6877,6 @@ function fallbackDownload(blob, ext) {
   setTimeout(() => URL.revokeObjectURL(url), 5000);
 }
 
-
-function audioBufferToWav(buffer) {
-  const numCh  = buffer.numberOfChannels;
-  const sr     = buffer.sampleRate;
-  const len    = buffer.length;
-  const bytes  = len * numCh * 2;
-  const ab     = new ArrayBuffer(44 + bytes);
-  const view   = new DataView(ab);
-  const str    = (off, s) => { for (let i=0;i<s.length;i++) view.setUint8(off+i, s.charCodeAt(i)); };
-  str(0,'RIFF'); view.setUint32(4, 36+bytes, true); str(8,'WAVE');
-  str(12,'fmt '); view.setUint32(16,16,true); view.setUint16(20,1,true);
-  view.setUint16(22,numCh,true); view.setUint32(24,sr,true);
-  view.setUint32(28,sr*numCh*2,true); view.setUint16(32,numCh*2,true);
-  view.setUint16(34,16,true); str(36,'data'); view.setUint32(40,bytes,true);
-  const channels = [];
-  for (let c=0;c<numCh;c++) channels.push(buffer.getChannelData(c));
-  let off = 44;
-  for (let i=0;i<len;i++) for (let c=0;c<numCh;c++) {
-    const s = Math.max(-1, Math.min(1, channels[c][i]));
-    view.setInt16(off, s<0 ? s*32768 : s*32767, true); off += 2;
-  }
-  return ab;
-}
 
 document.getElementById('recWavBtn').addEventListener('click', recExportWav);
 document.getElementById('recLoadInput').addEventListener('change',e=>{
