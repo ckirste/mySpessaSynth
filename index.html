@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v11</h1>
+    <h1>Ensemble_v12</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -2016,10 +2016,16 @@ async ensureCtx() {
 
     onProgress('SpessaSynth lädt SF2…', 40);
 
+    const sfSizeMB = arrayBuffer.byteLength / 1048576;
+    if (sfSizeMB > 300) {
+      onProgress(`Große SF2 (${sfSizeMB.toFixed(0)}MB) — bitte warten…`, 35);
+    }
+
     // SpessaSynth v3: laden über soundfontManager.addNewSoundFont
     try {
       if (!this.synth) {
         // Erster SF2-Load: Synth mit echtem Buffer erstellen
+        // Hinweis: SpessaSynth transferiert den ArrayBuffer ins Worklet (neuroniert ihn)
         this.synth = new Synthetizer(this.masterGain, arrayBuffer);
         await this.synth.isReady;
         console.log("SF2 geladen (init), presetList:", this.synth.presetList?.length);
@@ -2031,6 +2037,8 @@ async ensureCtx() {
       } else {
         throw new Error('soundfontManager nicht gefunden');
       }
+      // ArrayBuffer-Referenz freigeben (SpessaSynth hat ihn transferiert/kopiert)
+      arrayBuffer = null;
     } catch(e) {
       throw new Error('SF2 Ladefehler: ' + e.message);
     }
@@ -2123,7 +2131,7 @@ async ensureCtx() {
       if (v) {
         // Sustain-Pedal zurücksetzen bevor noteOff!
         try { this.synth.controllerChange(v.ch, 64, 0); } catch(e) {}
-        try { this.synth.noteOff(v.ch, v.midi, true); } catch(e) {}
+        try { this.synth.noteOff(v.ch, v.midi, false); } catch(e) {}
         this.voices.delete(k);
         found = true;
       }
@@ -2132,7 +2140,7 @@ async ensureCtx() {
     if (!found) {
       [...this._channels.entries()]
         .filter(([k]) => k.startsWith(`${layerId}_`))
-        .forEach(([, ch]) => { try { this.synth.noteOff(ch, midi, true); } catch(e) {} });
+        .forEach(([, ch]) => { try { this.synth.noteOff(ch, midi, false); } catch(e) {} });
     }
   }
 
@@ -2142,12 +2150,12 @@ async ensureCtx() {
     [...this.voices.entries()]
       .filter(([k]) => k.includes(`_${midi}_`) || k.endsWith(`_${midi}`))
       .forEach(([k, v]) => {
-        try { this.synth.noteOff(v.ch, v.midi, true); } catch(e) {}
+        try { this.synth.noteOff(v.ch, v.midi, false); } catch(e) {}
         this.voices.delete(k);
         allChannels.delete(v.ch);
       });
     // Fallback: noteOff auf verbleibenden Channels
-    allChannels.forEach(ch => { try { this.synth.noteOff(ch, midi, true); } catch(e) {} });
+    allChannels.forEach(ch => { try { this.synth.noteOff(ch, midi, false); } catch(e) {} });
   }
 
   stopAll() {
@@ -2170,7 +2178,7 @@ async ensureCtx() {
     const v = this.voices.get(key);
     if (!v) return;
     this.voices.delete(key);
-    try { this.synth.noteOff(v.ch, v.midi, true); } catch(e) {}
+    try { this.synth.noteOff(v.ch, v.midi, false); } catch(e) {}
   }
 
   // ── Channel management ────────────────────────────────────────
@@ -2227,12 +2235,10 @@ async ensureCtx() {
 
   _applyEffectsGain() {
     if (!this.synth) return;
-    // SpessaSynth v3: setEffectsGain(reverb 0-1, chorus 0-1)
-    // Wir skalieren etwas hoch damit der Effekt hörbarer ist
-    try { this.synth.setEffectsGain(
-      Math.min(1, this._reverbWet * 1.5),
-      Math.min(1, this._chorusWet * 1.5)
-    ); } catch(e) {}
+    const rev = Math.min(1, this._reverbWet * 1.5);
+    const cho = Math.min(1, this._chorusWet * 1.5);
+    console.log(`Effects: reverb=${rev.toFixed(2)} chorus=${cho.toFixed(2)}`);
+    try { this.synth.setEffectsGain(rev, cho); } catch(e) { console.log('setEffectsGain error:', e); }
   }
 
   setChorusRate(rate) { /* nicht in v3 extern steuerbar */ }
@@ -2304,7 +2310,7 @@ async ensureCtx() {
     const prefix = `${layerId}_${midi}`;
     [...this.voices.keys()].filter(k => k.startsWith(prefix)).forEach(k => {
       const v = this.voices.get(k);
-      if (v) { try { this.synth.noteOff(v.ch, v.midi, true); } catch(e) {} this.voices.delete(k); }
+      if (v) { try { this.synth.noteOff(v.ch, v.midi, false); } catch(e) {} this.voices.delete(k); }
     });
   }
 }
@@ -4241,11 +4247,21 @@ async function loadFile(file) {
   }
   setStatus('loading','Lädt…');
   try {
+    const fileSizeMB = file.size / 1048576;
+    if (fileSizeMB > 500) {
+      setStatus('loading', `⚠️ Sehr große SF2 (${fileSizeMB.toFixed(0)}MB) — kann abstürzen`);
+      await new Promise(r => setTimeout(r, 100)); // UI updaten lassen
+    }
     const ab = await file.arrayBuffer();
     const shortName = file.name.replace(/\.sf2$/i,'');
     const { sfIdx, presets } = await engine.load(ab, shortName, (lbl,pct)=>{showProg(lbl,pct);setStatus('loading',lbl);});
     // Save to IndexedDB in background (don't await — don't block UI)
-    sfDB.save(shortName, ab.slice(0)).then(()=>renderCachedSF2s()).catch(()=>{});
+    // Nur kleine SF2s (< 150MB) im Browser-Speicher cachen
+    if (ab.byteLength < 150 * 1024 * 1024) {
+      sfDB.save(shortName, ab.slice(0)).then(()=>renderCachedSF2s()).catch(()=>{});
+    } else {
+      console.log(`SF2 zu groß für Browser-Cache (${(ab.byteLength/1048576).toFixed(0)}MB) — nur im RAM`);
+    }
     // First soundfont: try auto-restore, otherwise add default layer
     if (engine.soundfonts.length === 1) {
       layers = []; nextLayerId = 1;
@@ -6725,36 +6741,67 @@ async function recExportWav() {
   btn.disabled = true;
 
   try {
-    // MediaRecorder: live Audio aufnehmen während Playback
-    const dest = engine.ctx.createMediaStreamDestination();
-    // Filternode (Ende der FX-Kette) anzapfen
+    await engine.ensureCtx();
+    const ctx = engine.ctx;
+
+    // MediaStreamDestination am Ende der FX-Kette anzapfen
+    const dest = ctx.createMediaStreamDestination();
     const srcNode = engine.filterNode ?? engine.masterGain;
     srcNode.connect(dest);
 
     const chunks = [];
-    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg']
+      .find(m => MediaRecorder.isTypeSupported(m)) || '';
     const mr = new MediaRecorder(dest.stream, mimeType ? { mimeType } : {});
     mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-    // Aufnahme starten, dann Playback
-    mr.start(100);
-    const tailMs = 3000; // Reverb-Nachhall
-    const totalMs = rec.duration + tailMs;
+    // Recorder starten
+    mr.start(50);
 
+    // Kurz warten damit Recorder bereit ist
+    await new Promise(r => setTimeout(r, 100));
+
+    // Eigenen Playback-Loop ohne recPlay() — direkt Events feuern
+    const tailMs = 2500;
+    const totalMs = rec.duration + tailMs;
+    const startT = performance.now();
+
+    // Events selbst abspielen (ohne rec.state zu ändern)
+    const timers = [];
+    rec.events.forEach(ev => {
+      const tid = setTimeout(() => {
+        if (ev.type === 'on') {
+          getActiveLayers().forEach(layer => {
+            if (ev.midi < layer.keyLo || ev.midi > layer.keyHi) return;
+            const transposed = ev.midi + globalTranspose + (layer.transpose ?? 0);
+            if (transposed < 0 || transposed > 127) return;
+            engine.playSync(transposed, layer.id, layer.sfIdx, layer.presetIdx,
+              ev.vel ?? 80, layer.vol, ctx.currentTime + 0.01, layer.envOverride);
+          });
+        } else {
+          getActiveLayers().forEach(layer => {
+            engine._killAllVoicesForNote(layer.id, ev.midi + globalTranspose + (layer.transpose ?? 0));
+          });
+        }
+      }, ev.t);
+      timers.push(tid);
+    });
+
+    // Warten bis Playback + Nachhall fertig
+    await new Promise(r => setTimeout(r, totalMs));
+    timers.forEach(t => clearTimeout(t));
+    engine.stopAll();
+
+    // MediaRecorder sauber stoppen und auf onstop warten
     await new Promise(resolve => {
-      // Playback starten
-      recPlay();
-      // Nach Playback + Tail stoppen
-      setTimeout(() => {
-        engine.stopAll();
-        mr.stop();
-        resolve();
-      }, totalMs);
+      mr.onstop = resolve;
+      mr.stop();
     });
 
     srcNode.disconnect(dest);
 
-    // Blob → Download
+    if (!chunks.length) throw new Error('Keine Audio-Daten aufgenommen');
+
     const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
     const ext  = blob.type.includes('ogg') ? 'ogg' : 'webm';
     const file = new File([blob], `ensemble_export.${ext}`, { type: blob.type });
@@ -6765,16 +6812,16 @@ async function recExportWav() {
     } else {
       fallbackDownload(blob, ext);
     }
+
   } catch(e) {
     console.error('WAV export error:', e);
     alert('Fehler beim Aufnehmen: ' + e.message);
   } finally {
     btn.textContent = '🔊 WAV';
     btn.disabled = false;
-    // Playback-State zurücksetzen
-    if (rec.state !== 'idle') recStopPlayback();
   }
 }
+
 
 function fallbackDownload(blob, ext) {
   const url = URL.createObjectURL(blob);
