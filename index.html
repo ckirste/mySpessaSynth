@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v7</h1>
+    <h1>Ensemble_v8</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1930,8 +1930,58 @@ async ensureCtx() {
     if (!this.ctx) {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
         this.masterGain = this.ctx.createGain();
-        this.masterGain.gain.value = this._vol || 0.5; // Nutzt vorhandene Lautstärke
-        this.masterGain.connect(this.ctx.destination);
+        this.masterGain.gain.value = this._vol || 0.75;
+
+        // ── Effekte-Kette: masterGain → EQ → Delay → Filter → destination ──
+        const ctx = this.ctx;
+
+        // EQ (3-Band)
+        this.eqLowNode  = ctx.createBiquadFilter();
+        this.eqLowNode.type = 'lowshelf';
+        this.eqLowNode.frequency.value = 250;
+        this.eqLowNode.gain.value = 0;
+
+        this.eqMidNode  = ctx.createBiquadFilter();
+        this.eqMidNode.type = 'peaking';
+        this.eqMidNode.frequency.value = 1200;
+        this.eqMidNode.Q.value = 1.2;
+        this.eqMidNode.gain.value = 0;
+
+        this.eqHighNode = ctx.createBiquadFilter();
+        this.eqHighNode.type = 'highshelf';
+        this.eqHighNode.frequency.value = 4000;
+        this.eqHighNode.gain.value = 0;
+
+        // Delay
+        this.delayNode    = ctx.createDelay(2.0);
+        this.delayNode.delayTime.value = 0.35;
+        this.delayFeedback = ctx.createGain();
+        this.delayFeedback.gain.value = 0.35;
+        this.delayWetGain = ctx.createGain();
+        this.delayWetGain.gain.value = 0;
+        this.delayDryGain = ctx.createGain();
+        this.delayDryGain.gain.value = 1;
+
+        // Filter
+        this.filterNode = ctx.createBiquadFilter();
+        this.filterNode.type = 'lowpass';
+        this.filterNode.frequency.value = 20000;
+
+        // Verbindungen: masterGain → EQ → delay split → filter → destination
+        this.masterGain.connect(this.eqLowNode);
+        this.eqLowNode.connect(this.eqMidNode);
+        this.eqMidNode.connect(this.eqHighNode);
+
+        // Delay (parallel: dry + wet)
+        this.eqHighNode.connect(this.delayDryGain);
+        this.eqHighNode.connect(this.delayNode);
+        this.delayNode.connect(this.delayFeedback);
+        this.delayFeedback.connect(this.delayNode);
+        this.delayNode.connect(this.delayWetGain);
+        this.delayDryGain.connect(this.filterNode);
+        this.delayWetGain.connect(this.filterNode);
+
+        this.filterNode.connect(ctx.destination);
     }
 
     if (!this._spessaReady) {
@@ -2159,17 +2209,28 @@ async ensureCtx() {
     // SpessaSynth v3 hat kein Delay — ignorieren
   }
 
-  setEqLow(v)  { this._eqLow  = v; this._applyEQ(); }
-  setEqMid(v)  { this._eqMid  = v; this._applyEQ(); }
-  setEqHigh(v) { this._eqHigh = v; this._applyEQ(); }
+  setEqLow(v)  { this._eqLow  = v; if (this.eqLowNode)  this.eqLowNode.gain.value  = v; }
+  setEqMid(v)  { this._eqMid  = v; if (this.eqMidNode)  this.eqMidNode.gain.value  = v; }
+  setEqHigh(v) { this._eqHigh = v; if (this.eqHighNode) this.eqHighNode.gain.value = v; }
 
-  _applyEQ() {
-    // SpessaSynth v3 hat kein globales EQ — könnte man mit BiquadFiltern auf masterGain bauen
+  _applyEQ() {} // unused — setEqXxx direkt
+
+  setDelay(wet, time) {
+    if (wet  !== undefined) this._delayWet = wet;
+    if (time !== undefined && this.delayNode) this.delayNode.delayTime.value = time;
+    if (this.delayWetGain) this.delayWetGain.gain.value = this._delayWet * 0.9;
+    if (this.delayDryGain) this.delayDryGain.gain.value = 1;
   }
 
-  setFilterFreq(freq, type) { /* kein globaler Filter in SpessaSynth v3 */ }
-  setSaturation(v)          { /* nicht unterstützt */ }
-  setWidth(v)               { /* nicht unterstützt */ }
+  setFilterFreq(freq, type) {
+    if (!this.filterNode) return;
+    if (type === 'off' || !type) { this.filterNode.frequency.value = 20000; return; }
+    this.filterNode.type = type;
+    this.filterNode.frequency.value = freq;
+  }
+
+  setSaturation(v) { /* nicht implementiert */ }
+  setWidth(v)      { /* nicht implementiert */ }
 
   // ── Compat stubs (UI calls these) ────────────────────────────
   async ensureAndGetStartT() {
@@ -6111,64 +6172,32 @@ function seqAddRow() {
 }
 
 function seqScheduleStep(stepIdx, time) {
-  // Use precise Web Audio scheduling (same as metronome), NOT setTimeout+play()
   const ctx = engine.ctx;
+  const SEQ_CH = 14; // MIDI-Channel 15 (0-basiert) für Sequencer
 
   seq.rows.forEach(row => {
     if (row.muted || !row.pattern[stepIdx]) return;
-
     const sf = engine.soundfonts[row.sfIdx];
     if (!sf) return;
+    const p = sf.presets[row.presetIdx];
+    if (!p) return;
 
-    const zone = engine.findZone(row.sfIdx, row.presetIdx, row.note, row.vel);
-    if (!zone || zone.sampleID < 0) return;
+    // Zeitverzögerung in ms bis zum geplanten Beat
+    const msDelay = Math.max(0, (time - ctx.currentTime) * 1000);
+    const noteDurMs = Math.round(seqSecPerStep() * 0.85 * 1000);
 
-    const sh = sf.parser.shdr[zone.sampleID];
-    if (!sh) return;
-
-    const buf = engine.getBuffer(row.sfIdx, zone.sampleID);
-    if (!buf) return;
-
-    // Pitch
-    const rootKey = zone.rootKey >= 0 ? zone.rootKey : sh.originalPitch;
-    const tune    = (zone.coarseTune||0) + (zone.fineTune||0)/100 + (sh.pitchCorrect||0)/100;
-    const semis   = (row.note - rootKey + tune) * ((zone.scaleTuning||100)/100);
-
-    const src = ctx.createBufferSource();
-    src.buffer = buf;
-    src.playbackRate.value = Math.max(0.0625, Math.pow(2, semis / 12));
-
-    // Loop
-    const doLoop = (zone.sampleModes & 1) === 1;
-    if (doLoop && sh.loopEnd > sh.loopStart && sh.loopEnd <= sh.end) {
-      src.loop = true;
-      src.loopStart = (sh.loopStart - sh.start) / buf.sampleRate;
-      src.loopEnd   = (sh.loopEnd   - sh.start) / buf.sampleRate;
-    }
-
-    // Gain envelope
-    const g    = ctx.createGain();
-    const peak = (row.vel / 127) * Math.pow(10, -(zone.initialAttenuation||0) / 200);
-    const att  = engine.timeCents(zone.attackVolEnv);
-    const t0   = Math.max(ctx.currentTime + 0.001, time);
-    g.gain.setValueAtTime(0, t0);
-    g.gain.linearRampToValueAtTime(Math.min(1, peak), t0 + Math.max(0.003, att));
-
-    // Note off: 90% of step duration
-    const noteOff = t0 + seqSecPerStep() * 0.9;
-    const rel = Math.max(0.04, engine.timeCents(zone.releaseVolEnv ?? -8000));
-    g.gain.setValueAtTime(Math.min(1, peak), noteOff);
-    g.gain.exponentialRampToValueAtTime(0.0001, noteOff + rel);
-
-    // Connect through the full FX chain
-    src.connect(g);
-    g.connect(engine.voiceDestination);
-    src.start(t0);
-    src.stop(noteOff + rel + 0.05);
+    setTimeout(() => {
+      if (!seq.running) return;
+      // Preset auf Kanal setzen
+      if (p.bank) engine.synth.controllerChange(SEQ_CH, 0, p.bank);
+      engine.synth.programChange(SEQ_CH, p.program);
+      engine.synth.controllerChange(SEQ_CH, 7, Math.round(row.vel));
+      engine.synth.noteOn(SEQ_CH, row.note, row.vel);
+      setTimeout(() => { try { engine.synth.noteOff(SEQ_CH, row.note); } catch(e) {} }, noteDurMs);
+    }, msDelay);
 
     // Visual flash
     const rowId = row.id;
-    const msDelay = Math.max(0, (t0 - ctx.currentTime) * 1000);
     setTimeout(() => {
       const rowEl = document.getElementById('seqRow' + rowId);
       if (!rowEl) return;
