@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v13</h1>
+    <h1>Ensemble_v14</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -7733,8 +7733,25 @@ function jamRenderMixer() {
     row.appendChild(nameEl);
     row.appendChild(chips);
     row.appendChild(audioInd);
-    row.appendChild(audioVolWrap);
-    row.appendChild(vol);
+
+    // Schieberegler untereinander in einer Spalte
+    const sliderCol = document.createElement('div');
+    sliderCol.style.cssText = 'display:flex;flex-direction:column;gap:4px;flex-shrink:0';
+
+    const midiVolWrap = document.createElement('div');
+    midiVolWrap.style.cssText = 'display:flex;align-items:center;gap:4px';
+    const midiVolLbl = document.createElement('span');
+    midiVolLbl.style.cssText = 'font-size:.52rem;color:var(--text);opacity:.8;width:14px';
+    midiVolLbl.textContent = '🎵';
+    midiVolWrap.appendChild(midiVolLbl);
+    midiVolWrap.appendChild(vol);
+
+    audioVolWrap.insertBefore(audioVolLbl, audioVolWrap.firstChild);
+
+    sliderCol.appendChild(midiVolWrap);
+    sliderCol.appendChild(audioVolWrap);
+
+    row.appendChild(sliderCol);
     row.appendChild(muteBtn);
     wrap.appendChild(row);
   });
@@ -8235,7 +8252,11 @@ function rtcStartSpeakingDetection(name, stream) {
 
 // ── Signaling: ready-to-connect ──────────────────────────────
 function rtcSignalReadyToAll() {
-  // Initiiere Offer zu allen bereits verbundenen Spielern
+  // Allen verbundenen Spielern mitteilen dass wir Mikrofon haben
+  if (jam.ws?.readyState === WebSocket.OPEN) {
+    jam.ws.send(JSON.stringify({ type: 'rtc_ready' }));
+  }
+  // Und selbst Offer an alle senden
   jamPlayers.forEach((_, name) => {
     rtcCreatePeer(name, true);
   });
