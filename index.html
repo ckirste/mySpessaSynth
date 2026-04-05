@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v9</h1>
+    <h1>Ensemble_v1</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -2120,31 +2120,45 @@ async ensureCtx() {
   _killAllVoicesForNote(layerId, midi) {
     if (!this.synth) return;
     const prefix = `${layerId}_${midi}`;
+    let found = false;
     [...this.voices.keys()].filter(k => k.startsWith(prefix)).forEach(k => {
       const v = this.voices.get(k);
       if (v) {
         try { this.synth.noteOff(v.ch, v.midi); } catch(e) {}
         this.voices.delete(k);
+        found = true;
       }
     });
+    // Fallback: noteOff auf allen Channels dieser Layer
+    if (!found) {
+      [...this._channels.entries()]
+        .filter(([k]) => k.startsWith(`${layerId}_`))
+        .forEach(([, ch]) => { try { this.synth.noteOff(ch, midi); } catch(e) {} });
+    }
   }
 
   stopMidi(midi) {
     if (!this.synth) return;
+    const allChannels = new Set(this._channels.values());
     [...this.voices.entries()]
       .filter(([k]) => k.includes(`_${midi}_`) || k.endsWith(`_${midi}`))
       .forEach(([k, v]) => {
         try { this.synth.noteOff(v.ch, v.midi); } catch(e) {}
         this.voices.delete(k);
+        allChannels.delete(v.ch);
       });
+    // Fallback: noteOff auf verbleibenden Channels
+    allChannels.forEach(ch => { try { this.synth.noteOff(ch, midi); } catch(e) {} });
   }
 
   stopAll() {
     if (!this.synth) return;
-    try { this.synth.stopAll?.(); } catch(e) {}
-    // Fallback: all notes off on all channels
+    // SpessaSynth v3: stopAll(force=true) killt sofort alle Voices
+    try { this.synth.stopAll(true); } catch(e) {}
+    // Zusätzlich: CC123 (All Notes Off) auf allen Channels
     for (let ch = 0; ch < 16; ch++) {
-      try { this.synth.allNotesOff?.(ch); } catch(e) {}
+      try { this.synth.controllerChange(ch, 123, 0); } catch(e) {}
+      try { this.synth.controllerChange(ch, 120, 0); } catch(e) {} // All Sound Off
     }
     this.voices.clear();
     if (typeof heldNotes !== 'undefined') heldNotes.clear();
