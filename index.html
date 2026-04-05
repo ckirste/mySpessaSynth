@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v8</h1>
+    <h1>Ensemble_v9</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -2081,17 +2081,32 @@ async ensureCtx() {
     const sf = this.soundfonts[sfIdx];
     if (!sf) return;
 
-    // Get or assign MIDI channel for this layer
     const ch = this._getChannel(layerId, sfIdx, presetIdx);
 
-    // Volume via CC7 (scales with layerVol)
+    // Volume via CC7
     const ccVol = Math.round(Math.min(127, layerVol * 127));
     this.synth.controllerChange(ch, 7, ccVol);
 
-    // Note On
+    // ADSR-Override via MIDI CCs (CC73=Attack, CC72=Release, CC64=Sustain)
+    if (envOverride && Object.keys(envOverride).length) {
+      try {
+        if (envOverride.attack != null) {
+          const v = Math.round(Math.min(127, Math.max(0, Math.log(envOverride.attack / 0.002 + 1) / Math.log(4001) * 127)));
+          this.synth.controllerChange(ch, 73, v);
+        }
+        if (envOverride.release != null) {
+          const v = Math.round(Math.min(127, Math.max(0, Math.log(envOverride.release / 0.02 + 1) / Math.log(601) * 127)));
+          this.synth.controllerChange(ch, 72, v);
+        }
+        if (envOverride.sustain != null) {
+          const v = Math.round(envOverride.sustain * 127);
+          this.synth.controllerChange(ch, 64, v >= 64 ? 127 : 0);
+        }
+      } catch(e) {}
+    }
+
     this.synth.noteOn(ch, midi, vel);
 
-    // Track voice for stop()
     const key = `${layerId}_${midi}_0`;
     this.voices.set(key, { ch, midi, startT: startT ?? this.ctx.currentTime });
   }
@@ -2199,7 +2214,12 @@ async ensureCtx() {
 
   _applyEffectsGain() {
     if (!this.synth) return;
-    try { this.synth.setEffectsGain(this._reverbWet, this._chorusWet); } catch(e) {}
+    // SpessaSynth v3: setEffectsGain(reverb 0-1, chorus 0-1)
+    // Wir skalieren etwas hoch damit der Effekt hörbarer ist
+    try { this.synth.setEffectsGain(
+      Math.min(1, this._reverbWet * 1.5),
+      Math.min(1, this._chorusWet * 1.5)
+    ); } catch(e) {}
   }
 
   setChorusRate(rate) { /* nicht in v3 extern steuerbar */ }
@@ -6688,256 +6708,68 @@ document.getElementById('recMidiBtn').addEventListener('click',  recExportMidi);
 async function recExportWav() {
   if (!rec.events.length || rec.state !== 'idle') return;
   const btn = document.getElementById('recWavBtn');
-  btn.textContent = '⏳ Rendert…';
+  btn.textContent = '⏳ Aufnahme läuft…';
   btn.disabled = true;
 
   try {
-    const durationMs  = rec.duration + 3000; // +3s tail for reverb
-    const sampleRate  = 44100;
-    const numSamples  = Math.ceil(durationMs / 1000 * sampleRate);
-    const offCtx      = new OfflineAudioContext(2, numSamples, sampleRate);
+    // MediaRecorder: live Audio aufnehmen während Playback
+    const dest = engine.ctx.createMediaStreamDestination();
+    // Filternode (Ende der FX-Kette) anzapfen
+    const srcNode = engine.filterNode ?? engine.masterGain;
+    srcNode.connect(dest);
 
-    // ── Full FX graph — mirrors the live engine chain exactly ──
-    // Read all current FX values from the live engine
-    const reverbWet  = engine.reverbWetGain?.gain.value  ?? 0;
-    const reverbDry  = engine.reverbDryGain?.gain.value  ?? 1;
-    const delayWet   = engine.delayWetGain?.gain.value   ?? 0;
-    const delayDry   = engine.delayDryGain?.gain.value   ?? 1;
-    const delayTime  = engine.delayNode?.delayTime.value  ?? 0.35;
-    const delayFB    = engine.delayFeedback?.gain.value   ?? 0.35;
-    const chorusWet  = engine.chorusWetGain?.gain.value  ?? 0;
-    const eqLowGain  = engine.eqLow?.gain.value   ?? 0;
-    const eqMidGain  = engine.eqMid?.gain.value   ?? 0;
-    const eqHighGain = engine.eqHigh?.gain.value  ?? 0;
+    const chunks = [];
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg'].find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const mr = new MediaRecorder(dest.stream, mimeType ? { mimeType } : {});
+    mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
 
-    // EQ
-    const offEqLow  = offCtx.createBiquadFilter();
-    offEqLow.type = 'lowshelf'; offEqLow.frequency.value = 250; offEqLow.gain.value = eqLowGain;
-    const offEqMid  = offCtx.createBiquadFilter();
-    offEqMid.type = 'peaking'; offEqMid.frequency.value = 1200; offEqMid.Q.value = 1.2; offEqMid.gain.value = eqMidGain;
-    const offEqHigh = offCtx.createBiquadFilter();
-    offEqHigh.type = 'highshelf'; offEqHigh.frequency.value = 4000; offEqHigh.gain.value = eqHighGain;
+    // Aufnahme starten, dann Playback
+    mr.start(100);
+    const tailMs = 3000; // Reverb-Nachhall
+    const totalMs = rec.duration + tailMs;
 
-    // Compressor (same settings as live)
-    const offComp = offCtx.createDynamicsCompressor();
-    offComp.threshold.value = -18; offComp.knee.value = 8;
-    offComp.ratio.value = 4; offComp.attack.value = 0.003; offComp.release.value = 0.15;
-
-    // Reverb
-    const irLen  = engine.convolver?.buffer ? engine.convolver.buffer.length : Math.floor(sampleRate * 2.7);
-    const ir     = offCtx.createBuffer(2, irLen, sampleRate);
-    if (engine.convolver?.buffer) {
-      // Copy the actual IR from the live engine
-      for (let ch = 0; ch < Math.min(2, engine.convolver.buffer.numberOfChannels); ch++) {
-        ir.getChannelData(ch).set(engine.convolver.buffer.getChannelData(ch));
-      }
-    } else {
-      for (let ch = 0; ch < 2; ch++) {
-        const d = ir.getChannelData(ch);
-        for (let i = 0; i < irLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1 - i/irLen, 3);
-      }
-    }
-    const offConv      = offCtx.createConvolver(); offConv.buffer = ir;
-    const offRevWet    = offCtx.createGain(); offRevWet.gain.value = reverbWet;
-    const offRevDry    = offCtx.createGain(); offRevDry.gain.value = reverbDry;
-    const offRevMerge  = offCtx.createGain();
-
-    // Delay
-    const offDelay     = offCtx.createDelay(5.0); offDelay.delayTime.value = delayTime;
-    const offDelayFB   = offCtx.createGain(); offDelayFB.gain.value = delayFB;
-    const offDelayWet  = offCtx.createGain(); offDelayWet.gain.value = delayWet;
-    const offDelayDry  = offCtx.createGain(); offDelayDry.gain.value = delayDry;
-    const offDelayMerge= offCtx.createGain();
-
-    // Chorus (simplified — just wet/dry mix with a slight delay for the offline render)
-    const offChorWet   = offCtx.createGain(); offChorWet.gain.value = chorusWet;
-    const offChorDry   = offCtx.createGain(); offChorDry.gain.value = 1 - chorusWet * 0.5;
-    const offChorDelay = offCtx.createDelay(0.05); offChorDelay.delayTime.value = 0.008;
-    const offChorMerge = offCtx.createGain();
-
-    // Master
-    const masterGain = offCtx.createGain(); masterGain.gain.value = engine._vol ?? 0.75;
-
-    // Wire up: voices → EQ → chorus → delay → reverb → compressor → master → destination
-    // (voice gainNodes connect to offEqLow directly in the note scheduling below)
-    offEqLow.connect(offEqMid);
-    offEqMid.connect(offEqHigh);
-
-    // Chorus
-    offEqHigh.connect(offChorDry);
-    offEqHigh.connect(offChorDelay);
-    offChorDelay.connect(offChorWet);
-    offChorDry.connect(offChorMerge);
-    offChorWet.connect(offChorMerge);
-
-    // Delay
-    offChorMerge.connect(offDelayDry);
-    offChorMerge.connect(offDelay);
-    offDelay.connect(offDelayFB);
-    offDelayFB.connect(offDelay);
-    offDelay.connect(offDelayWet);
-    offDelayDry.connect(offDelayMerge);
-    offDelayWet.connect(offDelayMerge);
-
-    // Reverb
-    offDelayMerge.connect(offRevDry);
-    offDelayMerge.connect(offConv);
-    offConv.connect(offRevWet);
-    offRevDry.connect(offRevMerge);
-    offRevWet.connect(offRevMerge);
-
-    offRevMerge.connect(offComp);
-    offComp.connect(masterGain);
-    masterGain.connect(offCtx.destination);
-
-    // Voice gainNodes connect to offEqLow (= voiceDestination equivalent)
-
-    // ── Schedule all notes ──────────────────────────────────
-    const activeNotes = new Map(); // key → {src, gain}
-
-    // Pair note-on and note-off events first
-    // notePairs: Map<midi, [{onT, vel, offT}]>
-    const notePairs = [];
-    const openNotes = new Map(); // midi → {onT, vel}
-    rec.events.forEach(ev => {
-      const t = ev.t / 1000;
-      if (ev.type === 'on') {
-        openNotes.set(ev.midi, { onT: t, vel: ev.vel ?? 100 });
-      } else {
-        const on = openNotes.get(ev.midi);
-        if (on) { notePairs.push({ midi: ev.midi, onT: on.onT, vel: on.vel, offT: t }); openNotes.delete(ev.midi); }
-      }
-    });
-    // Any still-open notes at end of recording
-    openNotes.forEach((on, midi) => {
-      notePairs.push({ midi, onT: on.onT, vel: on.vel, offT: durationMs/1000 - 0.5 });
+    await new Promise(resolve => {
+      // Playback starten
+      recPlay();
+      // Nach Playback + Tail stoppen
+      setTimeout(() => {
+        engine.stopAll();
+        mr.stop();
+        resolve();
+      }, totalMs);
     });
 
-    // Schedule each note pair — mirrors live _playSingleZone logic exactly
-    notePairs.forEach(({ midi, onT, vel, offT }) => {
-      getActiveLayers().forEach(layer => {
-        if (layer.muted) return;
-        if (midi < layer.keyLo || midi > layer.keyHi) return;
-        const transposed = midi + globalTranspose + (layer.transpose ?? 0);
-        if (transposed < 0 || transposed > 127) return;
+    srcNode.disconnect(dest);
 
-        // velOverride — same as live
-        const _velBase = (layer.velOverride > 0) ? layer.velOverride : vel;
-        const layerVel = layer.velMode==='soft' ? 50 : layer.velMode==='hard' ? 127 : _velBase;
+    // Blob → Download
+    const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+    const ext  = blob.type.includes('ogg') ? 'ogg' : 'webm';
+    const file = new File([blob], `ensemble_export.${ext}`, { type: blob.type });
 
-        // All matching zones (like findZones in live)
-        const zones = engine.findZones(layer.sfIdx, layer.presetIdx, transposed, layerVel);
-        if (!zones.length) return;
-        const sf = engine.soundfonts[layer.sfIdx];
-        if (!sf) return;
-
-        zones.forEach((zone, zi) => {
-          if (!zone || zone.sampleID < 0) return;
-          const sh = sf.parser.shdr[zone.sampleID];
-          if (!sh) return;
-          const buf = engine.getBuffer(layer.sfIdx, zone.sampleID);
-          if (!buf) return;
-
-          const rootKey = zone.rootKey >= 0 ? zone.rootKey : sh.originalPitch;
-          const tune    = zone.coarseTune + zone.fineTune/100 + sh.pitchCorrect/100;
-          const semis   = (transposed - rootKey + tune) * ((zone.scaleTuning||100)/100);
-
-          // Envelope — same as live _playSingleZone
-          const env = layer.envOverride ?? {};
-          const attackDur  = env.attack  != null ? Math.max(0.002, env.attack)
-                           : Math.max(engine.timeCents(zone.attackVolEnv), 0.020);
-          const sustainLvl = env.sustain != null ? Math.max(0.001, Math.min(1, env.sustain)) : 1.0;
-          const releaseDur = env.release != null ? Math.max(0.020, env.release)
-                           : Math.max(engine.timeCents(zone.releaseVolEnv ?? -3600), 0.050);
-          const holdDur    = engine.timeCents(zone.holdVolEnv  ?? -12000);
-          const decayDur   = engine.timeCents(zone.decayVolEnv ?? -12000);
-          const susAtten   = zone.sustainVolEnv ?? 0;
-
-          // Peak — same cap as live
-          const _atten = Math.min(zone.initialAttenuation || 0, 40);
-          const peak   = Math.min(1, Math.max(0.001,
-            layer.vol * sustainLvl * (layerVel/127) * Math.pow(10, -_atten/200)));
-          const susLevel = peak * Math.pow(10, -susAtten/200);
-
-          const gainNode = offCtx.createGain();
-          gainNode.connect(offEqLow);
-          const src = offCtx.createBufferSource();
-          src.buffer = buf;
-          src.playbackRate.value = Math.max(0.0625, Math.pow(2, semis/12));
-          src.connect(gainNode);
-
-          if ((zone.sampleModes & 1) === 1 && sh.loopEnd > sh.loopStart && sh.loopEnd <= sh.end) {
-            src.loop = true;
-            src.loopStart = (sh.loopStart - sh.start) / buf.sampleRate;
-            src.loopEnd   = (sh.loopEnd   - sh.start) / buf.sampleRate;
-          }
-
-          // Envelope automation — mirrors live code
-          gainNode.gain.setValueAtTime(0, onT);
-          gainNode.gain.linearRampToValueAtTime(0.001, onT + 0.004);
-          gainNode.gain.exponentialRampToValueAtTime(peak, onT + attackDur);
-          if (holdDur > 0.005) gainNode.gain.setValueAtTime(peak, onT + attackDur + holdDur);
-          if (decayDur > 0.005 && susAtten > 0)
-            gainNode.gain.exponentialRampToValueAtTime(Math.max(0.0001, susLevel), onT + attackDur + holdDur + decayDur);
-          // Hold at sustain level until note off
-          gainNode.gain.setValueAtTime(gainNode.gain.value, offT);
-          gainNode.gain.exponentialRampToValueAtTime(0.0001, offT + releaseDur);
-
-          src.start(onT);
-          try { src.stop(offT + releaseDur + 0.01); } catch(e) {}
-        });
-      });
-    });
-
-    btn.textContent = '⏳ Encodiert…';
-    const renderedBuffer = await offCtx.startRendering();
-
-    // Apply short fade-in and fade-out to avoid DC-offset clicks at file boundaries
-    const fadeFrames = Math.floor(renderedBuffer.sampleRate * 0.015); // 15ms
-    for (let ch = 0; ch < renderedBuffer.numberOfChannels; ch++) {
-      const d = renderedBuffer.getChannelData(ch);
-      for (let i = 0; i < fadeFrames; i++) {
-        d[i] *= i / fadeFrames;
-        d[d.length - 1 - i] *= i / fadeFrames;
-      }
-    }
-    const wav  = audioBufferToWav(renderedBuffer);
-    const blob = new Blob([wav], { type: 'audio/wav' });
-    const file = new File([blob], 'sf2player_export.wav', { type: 'audio/wav' });
-
-    // Try native share (Android/iOS) — fall back to download
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      try {
-        await navigator.share({
-          files: [file],
-          title: 'SF2 Player Export',
-          text: 'Aufnahme aus SF2 Player',
-        });
-      } catch(shareErr) {
-        if (shareErr.name !== 'AbortError') {
-          // User cancelled is fine — anything else → fall back to download
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url; a.download = 'sf2player_export.wav'; a.click();
-          setTimeout(() => URL.revokeObjectURL(url), 5000);
-        }
-      }
+      try { await navigator.share({ files: [file], title: 'Ensemble Export' }); }
+      catch(e) { if (e.name !== 'AbortError') fallbackDownload(blob, ext); }
     } else {
-      // Desktop or browser without share support → direct download
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url; a.download = 'sf2player_export.wav'; a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      fallbackDownload(blob, ext);
     }
-
   } catch(e) {
     console.error('WAV export error:', e);
-    alert('Fehler beim Rendern: ' + e.message);
+    alert('Fehler beim Aufnehmen: ' + e.message);
   } finally {
     btn.textContent = '🔊 WAV';
     btn.disabled = false;
+    // Playback-State zurücksetzen
+    if (rec.state !== 'idle') recStopPlayback();
   }
 }
+
+function fallbackDownload(blob, ext) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `ensemble_export.${ext}`; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+}
+
 
 function audioBufferToWav(buffer) {
   const numCh  = buffer.numberOfChannels;
