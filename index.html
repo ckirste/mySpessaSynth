@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v17</h1>
+    <h1>Ensemble_v18</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -7947,7 +7947,7 @@ function jamConnect() {
 
   jam.ws.onmessage = ev => {
     let msg; try { msg = JSON.parse(ev.data); } catch { return; }
-    jamHandleMessage(msg);
+    window.jamHandleMessage(msg);
   };
 
   jam.ws.onerror = () => jamSetStatus('error', 'Verbindungsfehler');
