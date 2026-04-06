@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v18</h1>
+    <h1>Ensemble_v19</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -7687,18 +7687,18 @@ function jamLayerIdFor(name, layerIdx) {
 }
 
 function jamPlayNote(playerName, layerIdx, midi, vel) {
+  console.log(`jamPlayNote: ${playerName} midi=${midi} vel=${vel} layerIdx=${layerIdx}`);
   const player = jamPlayers.get(playerName);
-  if (!player || player.muted) return;
-  if (!engine.soundfonts.length || !engine.synth) return;
+  if (!player || player.muted) { console.log('jamPlayNote: no player or muted'); return; }
+  if (!engine.soundfonts.length || !engine.synth) { console.log('jamPlayNote: no soundfonts or synth'); return; }
 
   const layerInfo = player.layers[layerIdx] || player.layers[0];
-  if (!layerInfo) return;
+  if (!layerInfo) { console.log('jamPlayNote: no layerInfo, player.layers=', JSON.stringify(player.layers)); return; }
 
   const found = jamFindPreset(layerInfo.sfName, layerInfo.presetName, layerInfo.program, layerInfo.bank);
-  if (!found) return;
+  if (!found) { console.log('jamPlayNote: preset not found', layerInfo.sfName, layerInfo.presetName); return; }
 
-  // Eigenen MIDI-Channel für diesen Jam-Spieler reservieren (CH 13 = idx 12, fix)
-  // Mehrere Spieler teilen sich Channels 12-15 (über layerIdx)
+  console.log(`jamPlayNote: found sfIdx=${found.sfIdx} presetIdx=${found.presetIdx}`);
   const ch = 12 + (layerIdx % 4);
   const vol = Math.round(Math.min(127, (layerInfo.vol ?? 1) * (player.vol ?? 1) * 100));
 
@@ -7711,10 +7711,10 @@ function jamPlayNote(playerName, layerIdx, midi, vel) {
         engine.synth.controllerChange(ch, 7, vol);
       }
       engine.synth.noteOn(ch, midi, vel);
-      // Track für noteOff
+      console.log(`jamPlayNote: noteOn ch=${ch} midi=${midi}`);
       const key = `jam_${playerName}_${layerIdx}_${midi}`;
       engine.voices.set(key, { ch, midi });
-    } catch(e) { console.warn('jamPlayNote error:', e); }
+    } catch(e) { console.log('jamPlayNote error:', e.message); }
   });
 }
 
