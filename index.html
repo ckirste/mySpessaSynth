@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v16</h1>
+    <h1>Ensemble_v17</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1032,6 +1032,12 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
       <div class="pitch-section" id="pitchSection" style="display:none">
         Pitch
         <div class="pitchbar-wrap"><div class="pitchcenter"></div><div class="pitchbar" id="pitchBar"></div></div>
+      </div>
+      <div style="margin-top:8px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+        <button id="blockPCBtn" style="background:#07070f;border:1px solid var(--border);border-radius:7px;color:var(--dim);font-size:.65rem;font-family:'Share Tech Mono',monospace;padding:5px 10px;cursor:pointer;transition:all .15s"
+          title="MIDI Program-Change-Nachrichten ignorieren (verhindert ungewollte Instrument-Wechsel durch E-Piano-Tasten)">
+          🚫 Program Change: AN
+        </button>
       </div>
     </div>
   
@@ -1425,7 +1431,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
           <option value="voice">🎤 Gesang/Headset</option>
           <option value="instrument">🎸 Instrument/Line-In</option>
         </select>
-        <button class="jam-mic-btn" id="jamMicBtn" disabled title="Mikrofon einschalten">🎙</button>
+        <button class="jam-mic-btn" id="jamMicBtn" title="Mikrofon einschalten">🎙</button>
         <div class="jam-vu-wrap"><div class="jam-vu-bar" id="jamVuBar"></div></div>
         <button class="jam-mic-btn" id="jamMicMuteBtn" disabled title="Mikrofon stummschalten">🔇</button>
       </div>
@@ -2291,7 +2297,30 @@ async ensureCtx() {
     this.filterNode.frequency.value = freq;
   }
 
-  setSaturation(v) { /* nicht implementiert */ }
+  setSaturation(v) {
+    this._saturation = v;
+    if (!this.ctx) return;
+    // WaveShaper für Saturation — lazy erstellen
+    if (!this._saturator) {
+      this._saturator = this.ctx.createWaveShaper();
+      this._saturatorGain = this.ctx.createGain();
+      this._saturatorGain.gain.value = 0; // start dry
+      // In die Kette: filterNode → saturator → destination (parallel zu dry)
+      this.filterNode.connect(this._saturator);
+      this._saturator.connect(this._saturatorGain);
+      this._saturatorGain.connect(this.ctx.destination);
+    }
+    // Saturation-Kurve (Soft-Clipping)
+    const k = v * 100;
+    const n = 256;
+    const curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) {
+      const x = (i * 2) / n - 1;
+      curve[i] = k > 0 ? (Math.PI + k) * x / (Math.PI + k * Math.abs(x)) : x;
+    }
+    this._saturator.curve = curve;
+    this._saturatorGain.gain.value = v * 0.6; // wet mix
+  }
   setWidth(v)      { /* nicht implementiert */ }
 
   // ── Compat stubs (UI calls these) ────────────────────────────
@@ -3056,6 +3085,20 @@ function renderDrawbars() {
       row.appendChild(stop);
     });
   });
+}
+
+// Buzz: kombiniert Saturation aller Buzz-aktiven Layer
+function _applyBuzz() {
+  const buzzLayers = layers.filter(l => l.buzzEnabled && !l.muted);
+  if (!buzzLayers.length) {
+    // Nur layer-saturation anwenden
+    const maxSat = Math.max(0, ...layers.map(l => l.saturation ?? 0)) / 100;
+    engine.setSaturation(maxSat);
+    return;
+  }
+  const maxIntensity = Math.max(...buzzLayers.map(l => (l.buzzIntensity ?? 70))) / 100;
+  // Buzz = starke Saturation (0.4 base + intensity)
+  engine.setSaturation(0.4 + maxIntensity * 0.5);
 }
 
 function renderLayers() {
@@ -3922,6 +3965,8 @@ function renderLayers() {
     buzzToggle.addEventListener('click', () => {
       layer.buzzEnabled = !layer.buzzEnabled;
       updateBuzzToggle();
+      // Buzz = zusätzliche Saturation
+      _applyBuzz();
     });
     const makeBuzzSlider = (labelTxt, min, max, val, unit, onInput) => {
       const wrap = document.createElement('div');
@@ -3960,7 +4005,13 @@ function renderLayers() {
     const satSl = document.createElement('input');
     satSl.type='range'; satSl.min=0; satSl.max=100; satSl.step=1; satSl.value=layer.saturation;
     satSl.style.cssText = '-webkit-appearance:none;height:4px;width:100px;accent-color:var(--accent3);border-radius:2px;cursor:pointer';
-    satSl.addEventListener('input', function() { layer.saturation=parseInt(this.value); satValEl.textContent=this.value+'%'; });
+    satSl.addEventListener('input', function() {
+      layer.saturation = parseInt(this.value);
+      satValEl.textContent = this.value + '%';
+      // Max-Saturation aller Layer anwenden
+      const maxSat = Math.max(...layers.map(l => l.saturation ?? 0)) / 100;
+      engine.setSaturation(maxSat);
+    });
     satRow.appendChild(satLbl); satRow.appendChild(satSl); satRow.appendChild(satValEl);
     details.appendChild(satRow);
 
@@ -5708,8 +5759,8 @@ function handleMidiMessage(msg) {
       // Apply existing mappings
       midiCcDispatch(inputId, ch, d1, d2);
       break;
-    case 0xC0: // Program Change — update first layer
-      if (engine.soundfonts.length && layers.length) {
+    case 0xC0: // Program Change — nur wenn nicht blockiert
+      if (!window._blockProgramChange && engine.soundfonts.length && layers.length) {
         const sf = engine.soundfonts[layers[0].sfIdx];
         if (sf) { const idx = sf.presets.findIndex(p => p.program === d1 && p.bank === 0); if (idx >= 0) { layers[0].presetIdx = idx; renderLayers(); } }
       }
@@ -5802,6 +5853,16 @@ async function initMidi() {
 }
 
 document.getElementById('midiConnectBtn').addEventListener('click', initMidi);
+
+// Program Change Block Toggle
+window._blockProgramChange = false;
+document.getElementById('blockPCBtn').addEventListener('click', function() {
+  window._blockProgramChange = !window._blockProgramChange;
+  this.textContent = window._blockProgramChange ? '🚫 Program Change: AUS' : '🚫 Program Change: AN';
+  this.style.borderColor = window._blockProgramChange ? 'var(--accent2)' : 'var(--border)';
+  this.style.color = window._blockProgramChange ? 'var(--accent2)' : 'var(--dim)';
+  this.style.background = window._blockProgramChange ? 'rgba(255,64,96,.08)' : '#07070f';
+});
 
 // ══════════════════════════════════════════════════════════════
 //  PDF VIEWER
@@ -7628,7 +7689,7 @@ function jamLayerIdFor(name, layerIdx) {
 function jamPlayNote(playerName, layerIdx, midi, vel) {
   const player = jamPlayers.get(playerName);
   if (!player || player.muted) return;
-  if (!engine.soundfonts.length) return;
+  if (!engine.soundfonts.length || !engine.synth) return;
 
   const layerInfo = player.layers[layerIdx] || player.layers[0];
   if (!layerInfo) return;
@@ -7636,19 +7697,37 @@ function jamPlayNote(playerName, layerIdx, midi, vel) {
   const found = jamFindPreset(layerInfo.sfName, layerInfo.presetName, layerInfo.program, layerInfo.bank);
   if (!found) return;
 
-  const vol     = (layerInfo.vol ?? 1) * player.vol;
-  const layerId = jamLayerIdFor(playerName, layerIdx);
+  // Eigenen MIDI-Channel für diesen Jam-Spieler reservieren (CH 13 = idx 12, fix)
+  // Mehrere Spieler teilen sich Channels 12-15 (über layerIdx)
+  const ch = 12 + (layerIdx % 4);
+  const vol = Math.round(Math.min(127, (layerInfo.vol ?? 1) * (player.vol ?? 1) * 100));
 
-  engine.ensureAndGetStartT().then(startT => {
-    engine.playSync(midi, layerId, found.sfIdx, found.presetIdx, vel, vol, startT);
+  engine.ensureCtx().then(() => {
+    try {
+      const p = engine.soundfonts[found.sfIdx]?.presets[found.presetIdx];
+      if (p) {
+        if (p.bank) engine.synth.controllerChange(ch, 0, p.bank);
+        engine.synth.programChange(ch, p.program);
+        engine.synth.controllerChange(ch, 7, vol);
+      }
+      engine.synth.noteOn(ch, midi, vel);
+      // Track für noteOff
+      const key = `jam_${playerName}_${layerIdx}_${midi}`;
+      engine.voices.set(key, { ch, midi });
+    } catch(e) { console.warn('jamPlayNote error:', e); }
   });
 }
 
 function jamStopNote(playerName, layerIdx, midi) {
   const player = jamPlayers.get(playerName);
-  if (!player) return;
-  const layerId = jamLayerIdFor(playerName, layerIdx);
-  engine.stop(midi, layerId);
+  if (!player || !engine.synth) return;
+  const ch = 12 + (layerIdx % 4);
+  try {
+    engine.synth.controllerChange(ch, 64, 0); // Sustain-Pedal aus
+    engine.synth.noteOff(ch, midi, false);
+  } catch(e) {}
+  const key = `jam_${playerName}_${layerIdx}_${midi}`;
+  engine.voices.delete(key);
 }
 
 // ── Mixer UI ──────────────────────────────────────────────────
