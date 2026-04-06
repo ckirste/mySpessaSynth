@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v15</h1>
+    <h1>Ensemble_v16</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1454,12 +1454,13 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 </div>
 
 <script type="module">
-import { Synthetizer, Sequencer, audioBufferToWav } from "spessasynth_lib";
+import { Synthetizer } from "spessasynth_lib";
 
 // --- MOBILE DEBUGGER ---
 const debugDiv = document.createElement('div');
-debugDiv.style = "position:fixed;bottom:0;left:0;width:100%;max-height:150px;background:rgba(0,0,0,0.8);color:#0f0;font-size:10px;overflow-y:auto;z-index:9999;pointer-events:none;font-family:monospace;padding:5px;border-top:1px solid #0f0;";
-document.body.appendChild(debugDiv);
+debugDiv.style = "width:100%;background:rgba(0,0,0,0.8);color:#0f0;font-size:10px;overflow-y:auto;z-index:9999;pointer-events:none;font-family:monospace;padding:5px;border-top:1px solid #0f0;margin-top:8px;";
+// Am Ende des Body anhängen (nach dem Laden)
+window.addEventListener('DOMContentLoaded', () => document.body.appendChild(debugDiv));
 
 window.onerror = (msg, url, line) => {
     debugDiv.innerHTML += `<div style="color:red">ERR: ${msg} (L:${line})</div>`;
@@ -6759,73 +6760,101 @@ document.getElementById('recMidiBtn').addEventListener('click',  recExportMidi);
 async function recExportWav() {
   if (!rec.events.length || rec.state !== 'idle') return;
   const btn = document.getElementById('recWavBtn');
-  btn.textContent = '⏳ Rendert…';
+  btn.textContent = '⏳ Aufnahme läuft…';
   btn.disabled = true;
 
   try {
-    // 1. Events → MIDI-Bytes (gleiche Logik wie recExportMidi)
-    const midiBytes = buildMidiBytes(rec.events, rec.duration);
+    await engine.ensureCtx();
+    const ctx = engine.ctx;
 
-    // 2. SpessaSynth Offline-Render:
-    //    Sequencer mit MIDI laden → renderAudio() → AudioBuffer → WAV
-    const sampleRate = 44100;
+    // Export-Banner anzeigen
+    const exportBanner = document.createElement('div');
+    exportBanner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:rgba(0,229,255,0.15);border-bottom:2px solid var(--accent);color:var(--accent);font-family:"Share Tech Mono",monospace;font-size:.8rem;text-align:center;padding:10px;z-index:9998;letter-spacing:.1em;';
+    exportBanner.textContent = '⏳ Export läuft — bitte warten…';
+    document.body.appendChild(exportBanner);
 
-    // Sequencer an bestehenden Synth hängen
-    const seq = new Sequencer(engine.synth);
-    seq.loadNewSongList([midiBytes]);
+    // Lautsprecher stumm während Export
+    engine.filterNode.disconnect(ctx.destination);
+    const silentGain = ctx.createGain();
+    silentGain.gain.value = 0;
+    engine.filterNode.connect(silentGain);
+    silentGain.connect(ctx.destination);
 
-    // Warten bis MIDI geladen
-    await new Promise(r => setTimeout(r, 200));
+    // MediaRecorder an FX-Kette
+    const dest = ctx.createMediaStreamDestination();
+    engine.filterNode.connect(dest);
 
-    // renderAudio — schneller als Echtzeit, kein Lautsprecher
-    btn.textContent = '⏳ Offline-Render…';
-    const buffers = await engine.synth.renderAudio(sampleRate, {
-      enableEffects:   true,
-      extraTime:       3,    // Sekunden Nachhall am Ende
-      progressCallback: (p) => {
-        btn.textContent = `⏳ ${Math.round(p * 100)}%…`;
-      },
+    const chunks = [];
+    const mimeType = ['audio/webm;codecs=opus','audio/webm','audio/ogg']
+      .find(m => MediaRecorder.isTypeSupported(m)) || '';
+    const mr = new MediaRecorder(dest.stream, mimeType ? { mimeType } : {});
+    mr.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+    mr.start(50);
+
+    await new Promise(r => setTimeout(r, 100));
+
+    // Events direkt abspielen (ohne rec.state zu ändern)
+    const timers = [];
+    rec.events.forEach(ev => {
+      const tid = setTimeout(() => {
+        if (ev.type === 'on') {
+          getActiveLayers().forEach(layer => {
+            if (ev.midi < layer.keyLo || ev.midi > layer.keyHi) return;
+            const t = ev.midi + globalTranspose + (layer.transpose ?? 0);
+            if (t < 0 || t > 127) return;
+            engine.playSync(t, layer.id, layer.sfIdx, layer.presetIdx,
+              ev.vel ?? 80, layer.vol, ctx.currentTime + 0.01, layer.envOverride);
+          });
+        } else {
+          getActiveLayers().forEach(layer => {
+            engine._killAllVoicesForNote(layer.id,
+              ev.midi + globalTranspose + (layer.transpose ?? 0));
+          });
+        }
+      }, ev.t);
+      timers.push(tid);
     });
 
-    // buffers = Array von AudioBuffers (dry + effects)
-    // Alle zusammenmischen
-    const totalLen = buffers[0].length;
-    const outBuf = new AudioBuffer({ sampleRate, numberOfChannels: 2, length: totalLen });
-    buffers.forEach(buf => {
-      for (let ch = 0; ch < 2; ch++) {
-        const out = outBuf.getChannelData(ch);
-        const src = buf.getChannelData(ch);
-        for (let i = 0; i < totalLen; i++) out[i] += src[i];
-      }
-    });
+    // Warten + Nachhall
+    await new Promise(r => setTimeout(r, rec.duration + 2500));
+    timers.forEach(t => clearTimeout(t));
+    engine.stopAll();
 
-    // 3. AudioBuffer → WAV
-    btn.textContent = '⏳ Encodiert…';
-    const wavBuffer = audioBufferToWav(outBuf);
-    const blob = new Blob([wavBuffer], { type: 'audio/wav' });
-    const file = new File([blob], 'ensemble_export.wav', { type: 'audio/wav' });
+    // Recorder sauber stoppen
+    await new Promise(resolve => { mr.onstop = resolve; mr.stop(); });
+
+    // Verbindungen wiederherstellen
+    engine.filterNode.disconnect(dest);
+    engine.filterNode.disconnect(silentGain);
+    silentGain.disconnect(ctx.destination);
+    engine.filterNode.connect(ctx.destination);
+
+    if (!chunks.length) throw new Error('Keine Audio-Daten aufgenommen');
+
+    const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' });
+    const ext  = blob.type.includes('ogg') ? 'ogg' : 'webm';
+    const file = new File([blob], `ensemble_export.${ext}`, { type: blob.type });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try { await navigator.share({ files: [file], title: 'Ensemble Export' }); }
-      catch(e) { if (e.name !== 'AbortError') fallbackDownload(blob, 'wav'); }
+      catch(e) { if (e.name !== 'AbortError') fallbackDownload(blob, ext); }
     } else {
-      fallbackDownload(blob, 'wav');
+      fallbackDownload(blob, ext);
     }
 
   } catch(e) {
     console.error('WAV export error:', e);
     alert('Fehler beim Rendern: ' + e.message);
+    // Lautsprecher sicherstellen
+    try { engine.filterNode.connect(engine.ctx.destination); } catch(e2) {}
   } finally {
     btn.textContent = '🔊 WAV';
     btn.disabled = false;
-    // Lautsprecher wiederherstellen falls nötig
-    try {
-      engine.filterNode.connect(engine.ctx.destination);
-    } catch(e) {}
+    exportBanner?.remove();
   }
 }
 
-// MIDI-Bytes aus Events bauen (extrahiert aus recExportMidi)
+
 function buildMidiBytes(events, duration) {
   const TICKS = 480, BPM = 120;
   const US_PER_BEAT = Math.round(60000000 / BPM);
