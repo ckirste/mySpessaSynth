@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ensemble_v20</title>
+<title>Ensemble_v21</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v20</h1>
+    <h1>Ensemble_v21</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -4829,6 +4829,25 @@ async function playMidi(midi, vel=100, ch=null, source='keys', inputId=null) {
   const k2 = document.querySelector(`#keyboard2 .key[data-midi="${midi}"]`);
   if (k2) k2.classList.add('active');
   trigViz(midi);
+
+  // Jam: Note an andere Mitspieler senden (direkt hier — window.playMidi wird im Modul nicht gecallt)
+  if (typeof jam !== 'undefined' && jam.connected && jam.ws?.readyState === WebSocket.OPEN
+      && source !== 'remote' && source !== 'player') {
+    const activeLayers = getActiveLayers().filter(l =>
+      midi >= l.keyLo && midi <= l.keyHi &&
+      (!l.sources || l.sources.includes(source))
+    );
+    if (activeLayers.length) {
+      activeLayers.forEach(l => {
+        jam.ws.send(JSON.stringify({
+          type: 'note_on', midi, vel: vel ?? 100,
+          layerIdx: layers.indexOf(l),
+        }));
+      });
+    } else {
+      jam.ws.send(JSON.stringify({ type: 'note_on', midi, vel: vel ?? 100, layerIdx: 0 }));
+    }
+  }
 }
 
 function stopMidi(midi) {
@@ -4860,6 +4879,11 @@ function stopMidi(midi) {
   if (k) k.classList.remove('active');
   const k2 = document.querySelector(`#keyboard2 .key[data-midi="${midi}"]`);
   if (k2) k2.classList.remove('active');
+
+  // Jam: note_off senden
+  if (typeof jam !== 'undefined' && jam.connected && jam.ws?.readyState === WebSocket.OPEN) {
+    jam.ws.send(JSON.stringify({ type: 'note_off', midi, layerIdx: 0 }));
+  }
 }
 
 // ── Keyboard ──────────────────────────────────────────────────
@@ -8128,37 +8152,7 @@ function jamHandleMessage(msg) {
 
 // ── Broadcast outgoing notes ──────────────────────────────────
 // Wrap playMidi to send note + which layerIdx triggered it
-const _origPlayMidi = playMidi;
-window.playMidi = async function(midi, vel=100, ch=null, source='keys', inputId=null) {
-  await _origPlayMidi(midi, vel, ch, source, inputId);
-  if (jam.connected && jam.ws?.readyState === WebSocket.OPEN &&
-      source !== 'remote' && source !== 'player') {
-    // Find which active layers responded (for layerIdx)
-    // Broadcast one message per active layer so recipients use correct instrument
-    const activeLayers = getActiveLayers().filter(l =>
-      midi >= l.keyLo && midi <= l.keyHi &&
-      (!l.sources || l.sources.includes(source))
-    );
-    if (activeLayers.length) {
-      activeLayers.forEach((l, i) => {
-        jam.ws.send(JSON.stringify({
-          type: 'note_on', midi, vel: vel ?? 100,
-          layerIdx: layers.indexOf(l),
-        }));
-      });
-    } else {
-      jam.ws.send(JSON.stringify({ type: 'note_on', midi, vel: vel ?? 100, layerIdx: 0 }));
-    }
-  }
-};
-
-const _origStopMidi = stopMidi;
-window.stopMidi = function(midi) {
-  _origStopMidi(midi);
-  if (jam.connected && jam.ws?.readyState === WebSocket.OPEN) {
-    jam.ws.send(JSON.stringify({ type: 'note_off', midi, layerIdx: 0 }));
-  }
-};
+// Jam note_on/off wird direkt in playMidi/stopMidi gesendet
 
 // Broadcast metro changes (but not when we receive from server)
 let _jamMetroLocal = false;
