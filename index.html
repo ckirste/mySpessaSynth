@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v19</h1>
+    <h1>Ensemble_v20</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -2808,22 +2808,32 @@ function regSnapshot() {
   return layers.map(l => {
     const sf = engine.soundfonts[l.sfIdx];
     return {
-      sfName:      sf?.name ?? null,
-      sfIdx:       l.sfIdx,
-      presetIdx:   l.presetIdx,
-      presetName:  sf?.presets[l.presetIdx]?.name ?? null,
-      program:     sf?.presets[l.presetIdx]?.program ?? 0,
-      bank:        sf?.presets[l.presetIdx]?.bank ?? 0,
-      vol:         l.vol,
-      muted:       l.muted,
-      transpose:   l.transpose ?? 0,
-      keyLo:       l.keyLo,
-      keyHi:       l.keyHi,
-      melody:      l.melody ?? false,
-      bass:        l.bass ?? false,
-      midiCh:      l.midiCh ?? null,
-      midiDeviceId:l.midiDeviceId ?? null,
-      sources:     l.sources ? [...l.sources] : ['screen','keys','midi','player'],
+      sfName:        sf?.name ?? null,
+      sfIdx:         l.sfIdx,
+      presetIdx:     l.presetIdx,
+      presetName:    sf?.presets[l.presetIdx]?.name ?? null,
+      program:       sf?.presets[l.presetIdx]?.program ?? 0,
+      bank:          sf?.presets[l.presetIdx]?.bank ?? 0,
+      vol:           l.vol,
+      muted:         l.muted,
+      transpose:     l.transpose ?? 0,
+      keyLo:         l.keyLo,
+      keyHi:         l.keyHi,
+      melody:        l.melody ?? false,
+      bass:          l.bass ?? false,
+      midiCh:        l.midiCh ?? null,
+      midiDeviceId:  l.midiDeviceId ?? null,
+      sources:       l.sources ? [...l.sources] : ['screen','keys','midi','player'],
+      velMode:       l.velMode    ?? 'free',
+      velOverride:   l.velOverride ?? 0,
+      saturation:    l.saturation  ?? 0,
+      buzzEnabled:   l.buzzEnabled  ?? false,
+      buzzThreshold: l.buzzThreshold ?? 127,
+      buzzIntensity: l.buzzIntensity ?? 70,
+      compEnabled:   l.compEnabled   ?? false,
+      compThreshold: l.compThreshold ?? -24,
+      compRatio:     l.compRatio     ?? 3,
+      envOverride:   l.envOverride   ? {...l.envOverride} : {},
     };
   });
 }
@@ -2844,11 +2854,29 @@ function regLoad(slot) {
     let presetIdx = ld.presetIdx ?? 0;
     if (sf && ld.presetName) { const f = sf.presets.findIndex(p => p.name === ld.presetName); if (f >= 0) presetIdx = f; }
     presetIdx = Math.max(0, Math.min(presetIdx, sf ? sf.presets.length-1 : 0));
-    layers.push({ id: nextLayerId++, sfIdx, presetIdx, vol: ld.vol ?? 0.8, muted: ld.muted ?? false,
-      transpose: ld.transpose ?? 0, keyLo: ld.keyLo ?? 0, keyHi: ld.keyHi ?? 127,
-      melody: ld.melody ?? false, melodyNote: null, bass: ld.bass ?? false, bassNote: null,
-      midiCh: ld.midiCh ?? null, midiDeviceId: ld.midiDeviceId ?? null, velMode: ld.velMode ?? 'free',
-      sources: ld.sources ?? ['screen','keys','midi','player'], label: null });
+    layers.push({ id: nextLayerId++, sfIdx, presetIdx,
+      vol:           ld.vol          ?? 0.8,
+      muted:         ld.muted        ?? false,
+      transpose:     ld.transpose    ?? 0,
+      keyLo:         ld.keyLo        ?? 0,
+      keyHi:         ld.keyHi        ?? 127,
+      melody:        ld.melody       ?? false, melodyNote: null,
+      bass:          ld.bass         ?? false, bassNote:   null,
+      midiCh:        ld.midiCh       ?? null,
+      midiDeviceId:  ld.midiDeviceId ?? null,
+      velMode:       ld.velMode      ?? 'free',
+      velOverride:   ld.velOverride  ?? 0,
+      sources:       ld.sources      ?? ['screen','keys','midi','player'],
+      saturation:    ld.saturation   ?? 0,
+      buzzEnabled:   ld.buzzEnabled  ?? false,
+      buzzThreshold: ld.buzzThreshold ?? 127,
+      buzzIntensity: ld.buzzIntensity ?? 70,
+      compEnabled:   ld.compEnabled  ?? false,
+      compThreshold: ld.compThreshold ?? -24,
+      compRatio:     ld.compRatio    ?? 3,
+      envOverride:   ld.envOverride  ? {...ld.envOverride} : {},
+      label: null,
+    });
   });
   renderLayers();
   document.getElementById('addLayerBtn').disabled = !engine.soundfonts.length;
@@ -7242,17 +7270,27 @@ function sessionSave() {
         const sf = engine.soundfonts[l.sfIdx];
         return sf && sf.presets[l.presetIdx] ? sf.presets[l.presetIdx].name : '';
       })(),
-      vol:       l.vol,
-      muted:     l.muted,
-      transpose: l.transpose,
-      keyLo:     l.keyLo,
-      keyHi:     l.keyHi,
-      melody:    l.melody,
-      bass:      l.bass,
-      midiCh:      l.midiCh      ?? null,
-      midiDeviceId:l.midiDeviceId ?? null,
-      sources:     l.sources     ?? ['screen','keys','midi','player'],
-      label:     l.label    ?? null,
+      vol:           l.vol,
+      muted:         l.muted,
+      transpose:     l.transpose,
+      keyLo:         l.keyLo,
+      keyHi:         l.keyHi,
+      melody:        l.melody,
+      bass:          l.bass,
+      midiCh:        l.midiCh       ?? null,
+      midiDeviceId:  l.midiDeviceId ?? null,
+      sources:       l.sources      ?? ['screen','keys','midi','player'],
+      label:         l.label        ?? null,
+      velMode:       l.velMode      ?? 'free',
+      velOverride:   l.velOverride  ?? 0,
+      saturation:    l.saturation   ?? 0,
+      buzzEnabled:   l.buzzEnabled  ?? false,
+      buzzThreshold: l.buzzThreshold ?? 127,
+      buzzIntensity: l.buzzIntensity ?? 70,
+      compEnabled:   l.compEnabled  ?? false,
+      compThreshold: l.compThreshold ?? -24,
+      compRatio:     l.compRatio    ?? 3,
+      envOverride:   l.envOverride  ? {...l.envOverride} : {},
     })),
   };
 
@@ -7429,17 +7467,27 @@ function applySessionLayers(d) {
       presetIdx,
       vol:        ld.vol        ?? 0.8,
       muted:      ld.muted      ?? false,
-      transpose:  ld.transpose  ?? 0,
-      keyLo:      ld.keyLo      ?? 0,
-      keyHi:      ld.keyHi      ?? 127,
-      melody:     ld.melody     ?? false,
-      melodyNote: null,
-      bass:       ld.bass       ?? false,
-      bassNote:   null,
-      midiCh:      ld.midiCh      ?? null,
-      midiDeviceId:ld.midiDeviceId ?? null,
-      sources:    ld.sources    ?? ['screen','keys','midi','player'],
-      label:      ld.label      ?? null,
+      transpose:     ld.transpose    ?? 0,
+      keyLo:         ld.keyLo        ?? 0,
+      keyHi:         ld.keyHi        ?? 127,
+      melody:        ld.melody       ?? false,
+      melodyNote:    null,
+      bass:          ld.bass         ?? false,
+      bassNote:      null,
+      midiCh:        ld.midiCh       ?? null,
+      midiDeviceId:  ld.midiDeviceId ?? null,
+      sources:       ld.sources      ?? ['screen','keys','midi','player'],
+      label:         ld.label        ?? null,
+      velMode:       ld.velMode      ?? 'free',
+      velOverride:   ld.velOverride  ?? 0,
+      saturation:    ld.saturation   ?? 0,
+      buzzEnabled:   ld.buzzEnabled  ?? false,
+      buzzThreshold: ld.buzzThreshold ?? 127,
+      buzzIntensity: ld.buzzIntensity ?? 70,
+      compEnabled:   ld.compEnabled  ?? false,
+      compThreshold: ld.compThreshold ?? -24,
+      compRatio:     ld.compRatio    ?? 3,
+      envOverride:   ld.envOverride  ? {...ld.envOverride} : {},
     });
   });
 
@@ -7693,25 +7741,38 @@ function jamPlayNote(playerName, layerIdx, midi, vel) {
   if (!engine.soundfonts.length || !engine.synth) { console.log('jamPlayNote: no soundfonts or synth'); return; }
 
   const layerInfo = player.layers[layerIdx] || player.layers[0];
-  if (!layerInfo) { console.log('jamPlayNote: no layerInfo, player.layers=', JSON.stringify(player.layers)); return; }
+  if (!layerInfo) { console.log('jamPlayNote: no layerInfo, layers=', player.layers?.length); return; }
 
   const found = jamFindPreset(layerInfo.sfName, layerInfo.presetName, layerInfo.program, layerInfo.bank);
-  if (!found) { console.log('jamPlayNote: preset not found', layerInfo.sfName, layerInfo.presetName); return; }
+  if (!found) { console.log('jamPlayNote: preset not found', layerInfo); return; }
 
-  console.log(`jamPlayNote: found sfIdx=${found.sfIdx} presetIdx=${found.presetIdx}`);
-  const ch = 12 + (layerIdx % 4);
-  const vol = Math.round(Math.min(127, (layerInfo.vol ?? 1) * (player.vol ?? 1) * 100));
+  // Verwende Channel basierend auf Spieler-Index statt layerIdx
+  // damit jeder Spieler einen eigenen Channel bekommt
+  const playerNames = [...jamPlayers.keys()];
+  const playerIdx = playerNames.indexOf(playerName);
+  const ch = Math.min(15, 12 + (playerIdx >= 0 ? playerIdx : 0));
+
+  const vol = Math.round(Math.min(127, (layerInfo.vol ?? 1) * (player.vol ?? 1) * 127));
+  const p = engine.soundfonts[found.sfIdx]?.presets[found.presetIdx];
 
   engine.ensureCtx().then(() => {
     try {
-      const p = engine.soundfonts[found.sfIdx]?.presets[found.presetIdx];
       if (p) {
-        if (p.bank) engine.synth.controllerChange(ch, 0, p.bank);
+        // Channel komplett zurücksetzen vor neuem Preset
+        engine.synth.controllerChange(ch, 120, 0); // All Sound Off
+        engine.synth.controllerChange(ch, 64, 0);  // Sustain off
+        engine.synth.controllerChange(ch, 7, vol); // Volume
+        if (p.bank) {
+          engine.synth.controllerChange(ch, 0, Math.floor(p.bank / 128)); // Bank MSB
+          engine.synth.controllerChange(ch, 32, p.bank % 128);            // Bank LSB
+        } else {
+          engine.synth.controllerChange(ch, 0, 0);
+          engine.synth.controllerChange(ch, 32, 0);
+        }
         engine.synth.programChange(ch, p.program);
-        engine.synth.controllerChange(ch, 7, vol);
       }
       engine.synth.noteOn(ch, midi, vel);
-      console.log(`jamPlayNote: noteOn ch=${ch} midi=${midi}`);
+      console.log(`jamPlayNote: noteOn ch=${ch} midi=${midi} prog=${p?.program} bank=${p?.bank}`);
       const key = `jam_${playerName}_${layerIdx}_${midi}`;
       engine.voices.set(key, { ch, midi });
     } catch(e) { console.log('jamPlayNote error:', e.message); }
