@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ensemble_v21</title>
+<title>Ensemble_v22</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v21</h1>
+    <h1>Ensemble_v22</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -4763,6 +4763,11 @@ function melodySwitch(layer, newMidi, vel, startT) {
 }
 
 async function playMidi(midi, vel=100, ch=null, source='keys', inputId=null) {
+  if (typeof rec !== 'undefined' && rec.state === 'armed') {
+    // Looper-Modus: Aufnahme startet erst beim ersten Ton
+    rec.startT = performance.now();
+    rec.state = 'recording';
+  }
   if (typeof rec !== 'undefined' && rec.state === 'recording')
     rec.events.push({ t: performance.now() - rec.startT, type: 'on', midi, vel, ch, source });
   if (typeof rec !== 'undefined' && rec.state === 'overdubbing')
@@ -6373,12 +6378,22 @@ function seqScheduleStep(stepIdx, time) {
 
     setTimeout(() => {
       if (!seq.running) return;
-      // Preset auf Kanal setzen
-      if (p.bank) engine.synth.controllerChange(SEQ_CH, 0, p.bank);
-      engine.synth.programChange(SEQ_CH, p.program);
-      engine.synth.controllerChange(SEQ_CH, 7, Math.round(row.vel));
-      engine.synth.noteOn(SEQ_CH, row.note, row.vel);
-      setTimeout(() => { try { engine.synth.noteOff(SEQ_CH, row.note); } catch(e) {} }, noteDurMs);
+      // Drum-Presets (bank 128) MÜSSEN auf Channel 9 gespielt werden –
+      // SpessaSynth behandelt nur CH9 als Percussion-Channel (GM-Standard).
+      const isDrum = (p.bank === 128);
+      const playCh = isDrum ? 9 : SEQ_CH;
+      // Preset auf Kanal setzen (Bank MSB/LSB korrekt aufteilen)
+      if (p.bank) {
+        engine.synth.controllerChange(playCh, 0,  Math.floor(p.bank / 128)); // Bank MSB
+        engine.synth.controllerChange(playCh, 32, p.bank % 128);             // Bank LSB
+      } else {
+        engine.synth.controllerChange(playCh, 0,  0);
+        engine.synth.controllerChange(playCh, 32, 0);
+      }
+      engine.synth.programChange(playCh, p.program);
+      engine.synth.controllerChange(playCh, 7, Math.round(row.vel));
+      engine.synth.noteOn(playCh, row.note, row.vel);
+      setTimeout(() => { try { engine.synth.noteOff(playCh, row.note); } catch(e) {} }, noteDurMs);
     }, msDelay);
 
     // Visual flash
@@ -6636,7 +6651,7 @@ metroSetBpm(120);
 //  MIDI RECORDER / PLAYER
 // ══════════════════════════════════════════════════════════════
 const rec = {
-  state:    'idle',   // 'idle' | 'recording' | 'playing' | 'overdubbing'
+  state:    'idle',   // 'idle' | 'armed' | 'recording' | 'playing' | 'overdubbing'
   events:   [],       // [{t, type:'on'|'off', midi, vel}]
   overdubEvents: [],  // new events captured during overdub
   startT:   0,
@@ -6658,11 +6673,11 @@ function recUpdateUI() {
   const hasRec = rec.events.length > 0;
   const dur    = rec.duration;
   const isOD   = rec.state === 'overdubbing';
-  document.getElementById('recRecordBtn').classList.toggle('active',  rec.state==='recording');
+  document.getElementById('recRecordBtn').classList.toggle('active',  rec.state==='recording'||rec.state==='armed');
   document.getElementById('recOverdubBtn').classList.toggle('active', isOD);
   document.getElementById('recPlayBtn').classList.toggle('active',    rec.state==='playing');
-  document.getElementById('recPlayBtn').disabled   = !hasRec || rec.state==='recording';
-  document.getElementById('recOverdubBtn').disabled= !hasRec || rec.state==='recording';
+  document.getElementById('recPlayBtn').disabled   = !hasRec || rec.state==='recording' || rec.state==='armed';
+  document.getElementById('recOverdubBtn').disabled= !hasRec || rec.state==='recording' || rec.state==='armed';
   document.getElementById('recStopBtn').disabled   = rec.state==='idle';
   document.getElementById('recSaveBtn').disabled   = !hasRec;
   document.getElementById('recMidiBtn').disabled   = !hasRec;
@@ -6670,14 +6685,15 @@ function recUpdateUI() {
   document.getElementById('recClearBtn').disabled  = !hasRec || rec.state!=='idle';
   const ind = document.getElementById('recIndicator');
   ind.className = 'rec-indicator' +
-    (rec.state==='recording'||isOD ? ' recording' : rec.state==='playing' ? ' playing' : '');
-  const elapsed = rec.state!=='idle' ? performance.now()-rec.startT : dur;
-  document.getElementById('recTime').textContent = fmtMs(Math.min(elapsed, dur||elapsed));
+    (rec.state==='armed' ? ' recording' : rec.state==='recording'||isOD ? ' recording' : rec.state==='playing' ? ' playing' : '');
+  const elapsed = (rec.state==='recording'||rec.state==='playing'||isOD) ? performance.now()-rec.startT : dur;
+  document.getElementById('recTime').textContent = rec.state==='armed' ? '0:00.0' : fmtMs(Math.min(elapsed, dur||elapsed));
   document.getElementById('recProgressBar').style.width =
     dur>0 && (rec.state==='playing'||isOD) ? Math.min(100,(performance.now()-rec.startT)/dur*100).toFixed(1)+'%'
     : dur>0 && rec.state==='idle' ? '100%' : '0%';
   document.getElementById('recInfo').textContent =
-    rec.state==='recording' ? rec.events.length+' Events aufgezeichnet'
+    rec.state==='armed'     ? '🔴 Warte auf ersten Ton…'
+    : rec.state==='recording' ? rec.events.length+' Events aufgezeichnet'
     : isOD ? '⊕ Overdub · '+rec.overdubEvents.length+' neue Events'
     : hasRec ? rec.events.length+' Events · '+fmtMs(dur) : 'Keine Aufnahme';
 }
@@ -6689,11 +6705,12 @@ function recTick() {
 
 function recStart() {
   if (rec.state==='playing'||rec.state==='overdubbing') recStopPlayback();
-  rec.events=[]; rec.startT=performance.now(); rec.state='recording';
+  rec.events=[]; rec.startT=0; rec.state='armed';
   rec.animFrame = requestAnimationFrame(recTick);
 }
 
 function recStop() {
+  if (rec.state==='armed') { rec.state='idle'; cancelAnimationFrame(rec.animFrame); recUpdateUI(); return; }
   if (rec.state!=='recording') return;
   for (const midi of heldNotes)
     rec.events.push({ t: performance.now()-rec.startT, type:'off', midi });
@@ -6861,10 +6878,10 @@ function recExportMidi() {
   URL.revokeObjectURL(a.href);
 }
 
-document.getElementById('recRecordBtn').addEventListener('click',  ()=>rec.state==='recording'?recStop():recStart());
+document.getElementById('recRecordBtn').addEventListener('click',  ()=>(rec.state==='recording'||rec.state==='armed')?recStop():recStart());
 document.getElementById('recOverdubBtn').addEventListener('click', ()=>rec.state==='overdubbing'?recStopOverdub():recOverdub());
 document.getElementById('recPlayBtn').addEventListener('click',    ()=>rec.state==='playing'?recStopPlayback():recPlay());
-document.getElementById('recStopBtn').addEventListener('click',  ()=>rec.state==='recording'?recStop():recStopPlayback());
+document.getElementById('recStopBtn').addEventListener('click',  ()=>(rec.state==='recording'||rec.state==='armed')?recStop():recStopPlayback());
 document.getElementById('recLoopBtn').addEventListener('click',  function(){ rec.looping=!rec.looping; this.classList.toggle('active',rec.looping); });
 document.getElementById('recSaveBtn').addEventListener('click',  recSave);
 document.getElementById('recMidiBtn').addEventListener('click',  recExportMidi);
@@ -6876,22 +6893,17 @@ async function recExportWav() {
   btn.textContent = '⏳ Aufnahme läuft…';
   btn.disabled = true;
 
+  // Banner außerhalb von try deklarieren — sonst ist er im finally-Block out of scope
+  let exportBanner = document.createElement('div');
+  exportBanner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:rgba(0,229,255,0.15);border-bottom:2px solid var(--accent);color:var(--accent);font-family:"Share Tech Mono",monospace;font-size:.8rem;text-align:center;padding:10px;z-index:9998;letter-spacing:.1em;';
+  exportBanner.textContent = '⏳ Export läuft — bitte warten…';
+  document.body.appendChild(exportBanner);
+
   try {
     await engine.ensureCtx();
     const ctx = engine.ctx;
 
-    // Export-Banner anzeigen
-    const exportBanner = document.createElement('div');
-    exportBanner.style.cssText = 'position:fixed;top:0;left:0;width:100%;background:rgba(0,229,255,0.15);border-bottom:2px solid var(--accent);color:var(--accent);font-family:"Share Tech Mono",monospace;font-size:.8rem;text-align:center;padding:10px;z-index:9998;letter-spacing:.1em;';
-    exportBanner.textContent = '⏳ Export läuft — bitte warten…';
-    document.body.appendChild(exportBanner);
-
-    // Lautsprecher stumm während Export
-    engine.filterNode.disconnect(ctx.destination);
-    const silentGain = ctx.createGain();
-    silentGain.gain.value = 0;
-    engine.filterNode.connect(silentGain);
-    silentGain.connect(ctx.destination);
+    // MediaRecorder an FX-Kette — Audio spielt mit normaler Lautstärke
 
     // MediaRecorder an FX-Kette
     const dest = ctx.createMediaStreamDestination();
@@ -6938,9 +6950,6 @@ async function recExportWav() {
 
     // Verbindungen wiederherstellen
     engine.filterNode.disconnect(dest);
-    engine.filterNode.disconnect(silentGain);
-    silentGain.disconnect(ctx.destination);
-    engine.filterNode.connect(ctx.destination);
 
     if (!chunks.length) throw new Error('Keine Audio-Daten aufgenommen');
 
@@ -7711,6 +7720,11 @@ const jam = {
   latencyMs:    0,
 };
 
+// Tracks the last loaded preset per MIDI channel so we only reinitialize
+// the channel when the instrument actually changes (fixes chord transmission:
+// CC120 "All Sound Off" was killing previous notes of the same chord).
+const _jamChPreset = {}; // key: ch → "sfIdx:presetIdx:vol"
+
 // Remote players: Map<name, { color, layers:[{presetName,sfName,program,bank,vol,muted}],
 //                             vol:1, muted:false, layerId:uniqueId }>
 const jamPlayers = new Map();
@@ -7782,18 +7796,23 @@ function jamPlayNote(playerName, layerIdx, midi, vel) {
   engine.ensureCtx().then(() => {
     try {
       if (p) {
-        // Channel komplett zurücksetzen vor neuem Preset
-        engine.synth.controllerChange(ch, 120, 0); // All Sound Off
-        engine.synth.controllerChange(ch, 64, 0);  // Sustain off
-        engine.synth.controllerChange(ch, 7, vol); // Volume
-        if (p.bank) {
-          engine.synth.controllerChange(ch, 0, Math.floor(p.bank / 128)); // Bank MSB
-          engine.synth.controllerChange(ch, 32, p.bank % 128);            // Bank LSB
-        } else {
-          engine.synth.controllerChange(ch, 0, 0);
-          engine.synth.controllerChange(ch, 32, 0);
+        // Nur bei Preset-Wechsel den Channel zurücksetzen.
+        // CC120 "All Sound Off" bei jeder Note würde laufende Akkord-Töne killen!
+        const presetKey = `${found.sfIdx}:${found.presetIdx}:${vol}`;
+        if (_jamChPreset[ch] !== presetKey) {
+          _jamChPreset[ch] = presetKey;
+          engine.synth.controllerChange(ch, 120, 0); // All Sound Off (nur bei Preset-Wechsel)
+          engine.synth.controllerChange(ch, 64, 0);  // Sustain off
+          engine.synth.controllerChange(ch, 7, vol); // Volume
+          if (p.bank) {
+            engine.synth.controllerChange(ch, 0, Math.floor(p.bank / 128)); // Bank MSB
+            engine.synth.controllerChange(ch, 32, p.bank % 128);            // Bank LSB
+          } else {
+            engine.synth.controllerChange(ch, 0, 0);
+            engine.synth.controllerChange(ch, 32, 0);
+          }
+          engine.synth.programChange(ch, p.program);
         }
-        engine.synth.programChange(ch, p.program);
       }
       engine.synth.noteOn(ch, midi, vel);
       console.log(`jamPlayNote: noteOn ch=${ch} midi=${midi} prog=${p?.program} bank=${p?.bank}`);
@@ -8040,6 +8059,7 @@ function jamConnect() {
   jam.ws.onclose = () => {
     jam.connected = false;
     jamPlayers.clear();
+    Object.keys(_jamChPreset).forEach(k => delete _jamChPreset[k]); // Reset channel state
     clearInterval(jam.pingInterval);
     jamSetStatus('', 'Nicht verbunden');
     document.getElementById('jamConnectRow').style.display = '';
