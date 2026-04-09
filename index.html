@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ensemble_v22</title>
+<title>Ensemble_v23</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -970,8 +970,8 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v22</h1>
-    <div class="sub">Online · by c. kirste </div>
+    <h1>Ensemble_v23</h1>
+    <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
 
@@ -1415,7 +1415,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
     <div class="jam-connect-row" id="jamConnectRow">
       <input class="jam-input" id="jamName"   placeholder="Dein Name" maxlength="24">
-      <input class="jam-input" id="jamServer" placeholder="wss://XXXXX.lhr.life  oder  wss://192.168.X.X:8765" value="wss://localhost:8765">
+      <input class="jam-input" id="jamServer" placeholder="wss://XXXXX.lhr.life  oder  ws://192.168.X.X:8765" value="wss://">
       <button class="jam-btn jam-btn-connect" id="jamConnectBtn">🔌 Verbinden</button>
     </div>
     <div style="font-size:.58rem;color:var(--dim);font-family:'Share Tech Mono',monospace;line-height:1.6">
@@ -3477,6 +3477,11 @@ function renderLayers() {
       // Remove focus from both fields
       psInput.blur();
       psSearch.blur();
+      // Jam: Instrument-Wechsel sofort an Mitspieler senden
+      if (typeof jamBroadcastLayers === 'function') {
+        clearTimeout(jam._layerBroadcastTimer);
+        jam._layerBroadcastTimer = setTimeout(jamBroadcastLayers, 100);
+      }
     }
 
     function psRenderDrop(query) {
@@ -8038,25 +8043,36 @@ function jamConnect() {
   jam.color = jamColorFor(name);
   jamSetStatus('connecting', 'Verbinde…');
 
-  try { jam.ws = new WebSocket(server); }
+  let ws;
+  try { ws = new WebSocket(server); }
   catch(e) { jamSetStatus('error', 'Ungültige URL'); return; }
 
-  jam.ws.onopen = () => {
-    jam.ws.send(JSON.stringify({ type: 'join', name: jam.name }));
+  // Alte Verbindung schließen, deren onclose aber deaktivieren damit es nicht stört
+  if (jam.ws) { jam.ws.onclose = null; try { jam.ws.close(); } catch(e) {} }
+  jam.ws = ws;
+
+  ws.onopen = () => {
+    if (jam.ws !== ws) return; // stale — neue Verbindung läuft bereits
+    ws.send(JSON.stringify({ type: 'join', name: jam.name }));
     jam.pingInterval = setInterval(() => {
-      if (jam.ws?.readyState === WebSocket.OPEN)
-        jam.ws.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
+      if (jam.ws === ws && ws.readyState === WebSocket.OPEN)
+        ws.send(JSON.stringify({ type: 'ping', ts: Date.now() }));
     }, 5000);
   };
 
-  jam.ws.onmessage = ev => {
+  ws.onmessage = ev => {
+    if (jam.ws !== ws) return; // stale
     let msg; try { msg = JSON.parse(ev.data); } catch { return; }
     window.jamHandleMessage(msg);
   };
 
-  jam.ws.onerror = () => jamSetStatus('error', 'Verbindungsfehler');
+  ws.onerror = () => {
+    if (jam.ws !== ws) return; // stale
+    jamSetStatus('error', 'Verbindungsfehler');
+  };
 
-  jam.ws.onclose = () => {
+  ws.onclose = () => {
+    if (jam.ws !== ws) return; // stale — Reconnect läuft bereits, nicht einmischen
     jam.connected = false;
     jamPlayers.clear();
     Object.keys(_jamChPreset).forEach(k => delete _jamChPreset[k]); // Reset channel state
