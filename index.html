@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ensemble_v23</title>
+<title>Ensemble_v24</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -970,8 +970,8 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v23</h1>
-    <div class="sub">by c. kirste · claude.ai & gemini</div>
+    <h1>Ensemble_v24</h1>
+    <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
 
@@ -4774,9 +4774,13 @@ async function playMidi(midi, vel=100, ch=null, source='keys', inputId=null) {
     rec.state = 'recording';
   }
   if (typeof rec !== 'undefined' && rec.state === 'recording')
-    rec.events.push({ t: performance.now() - rec.startT, type: 'on', midi, vel, ch, source });
+    rec.events.push({ t: performance.now() - rec.startT, type: 'on', midi, vel, ch, source,
+      layerSnap: getActiveLayers().filter(l => midi >= l.keyLo && midi <= l.keyHi)
+        .map(l => ({ id: l.id, sfIdx: l.sfIdx, presetIdx: l.presetIdx, vol: l.vol, transpose: l.transpose ?? 0, envOverride: l.envOverride })) });
   if (typeof rec !== 'undefined' && rec.state === 'overdubbing')
-    rec.overdubEvents.push({ t: performance.now() - rec.startT, type: 'on', midi, vel, ch, source });
+    rec.overdubEvents.push({ t: performance.now() - rec.startT, type: 'on', midi, vel, ch, source,
+      layerSnap: getActiveLayers().filter(l => midi >= l.keyLo && midi <= l.keyHi)
+        .map(l => ({ id: l.id, sfIdx: l.sfIdx, presetIdx: l.presetIdx, vol: l.vol, transpose: l.transpose ?? 0, envOverride: l.envOverride })) });
   // Learn mode
   if (learnTarget) {
     const layer = layers.find(l => l.id === learnTarget.layerId);
@@ -4862,9 +4866,11 @@ async function playMidi(midi, vel=100, ch=null, source='keys', inputId=null) {
 
 function stopMidi(midi) {
   if (typeof rec !== 'undefined' && rec.state === 'recording')
-    rec.events.push({ t: performance.now() - rec.startT, type: 'off', midi });
+    rec.events.push({ t: performance.now() - rec.startT, type: 'off', midi,
+      layerSnap: getActiveLayers().map(l => ({ id: l.id, transpose: l.transpose ?? 0 })) });
   if (typeof rec !== 'undefined' && rec.state === 'overdubbing')
-    rec.overdubEvents.push({ t: performance.now() - rec.startT, type: 'off', midi });
+    rec.overdubEvents.push({ t: performance.now() - rec.startT, type: 'off', midi,
+      layerSnap: getActiveLayers().map(l => ({ id: l.id, transpose: l.transpose ?? 0 })) });
   heldNotes.delete(midi);
 
   getActiveLayers().forEach(layer => {
@@ -6723,6 +6729,35 @@ function recStop() {
   rec.state='idle'; cancelAnimationFrame(rec.animFrame); recUpdateUI();
 }
 
+// ── Snapshot-aware playback helper ───────────────────────────
+// Plays/stops using the layer snapshot stored at record time,
+// so overdubbed tracks keep their original instrument regardless
+// of what layers are currently active.
+function recPlayEvent(ev) {
+  const ctx = engine.ctx;
+  if (ev.type === 'on') {
+    if (ev.layerSnap && ev.layerSnap.length) {
+      ev.layerSnap.forEach(snap => {
+        const t = ev.midi + globalTranspose + snap.transpose;
+        if (t < 0 || t > 127) return;
+        engine.playSync(t, snap.id, snap.sfIdx, snap.presetIdx,
+          ev.vel ?? 80, snap.vol, ctx.currentTime + 0.01, snap.envOverride);
+      });
+    } else {
+      // Fallback für alte Events ohne Snapshot
+      playMidi(ev.midi, ev.vel, ev.ch ?? null, ev.source ?? 'player');
+    }
+  } else {
+    if (ev.layerSnap && ev.layerSnap.length) {
+      ev.layerSnap.forEach(snap => {
+        engine.stop(ev.midi + globalTranspose + snap.transpose, snap.id);
+      });
+    } else {
+      stopMidi(ev.midi);
+    }
+  }
+}
+
 function recOverdub() {
   if (!rec.events.length || rec.state==='recording') return;
   if (rec.state==='overdubbing') { recStopOverdub(); return; }
@@ -6735,10 +6770,7 @@ function recOverdub() {
   rec.events.forEach(ev => {
     const tid = setTimeout(() => {
       if (rec.state !== 'overdubbing') return;
-      const wasState = rec.state; rec.state = 'playing_internal';
-      if (ev.type==='on') playMidi(ev.midi, ev.vel, ev.ch ?? null, ev.source ?? 'player');
-      else                stopMidi(ev.midi);
-      rec.state = wasState;
+      recPlayEvent(ev);
     }, ev.t);
     rec.playTimers.push(tid);
   });
@@ -6776,10 +6808,7 @@ function recPlay(offset=0) {
   rec.events.filter(ev=>ev.t>=offset).forEach(ev=>{
     const tid=setTimeout(()=>{
       if(rec.state!=='playing')return;
-      const wasState = rec.state; rec.state = 'playing_internal';
-      if(ev.type==='on') playMidi(ev.midi, ev.vel, ev.ch ?? null, ev.source ?? 'player');
-      else               stopMidi(ev.midi);
-      rec.state = wasState;
+      recPlayEvent(ev);
     }, ev.t-offset);
     rec.playTimers.push(tid);
   });
@@ -6927,20 +6956,7 @@ async function recExportWav() {
     const timers = [];
     rec.events.forEach(ev => {
       const tid = setTimeout(() => {
-        if (ev.type === 'on') {
-          getActiveLayers().forEach(layer => {
-            if (ev.midi < layer.keyLo || ev.midi > layer.keyHi) return;
-            const t = ev.midi + globalTranspose + (layer.transpose ?? 0);
-            if (t < 0 || t > 127) return;
-            engine.playSync(t, layer.id, layer.sfIdx, layer.presetIdx,
-              ev.vel ?? 80, layer.vol, ctx.currentTime + 0.01, layer.envOverride);
-          });
-        } else {
-          getActiveLayers().forEach(layer => {
-            engine._killAllVoicesForNote(layer.id,
-              ev.midi + globalTranspose + (layer.transpose ?? 0));
-          });
-        }
+        recPlayEvent(ev);
       }, ev.t);
       timers.push(tid);
     });
