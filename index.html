@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<title>Ensemble_v24</title>
+<title>Ensemble_v21</title>
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -970,7 +970,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
 
   <div class="header">
     <button class="fs-toggle" id="fsToggleBtn" title="Vollbild ein/aus">⛶</button>
-    <h1>Ensemble_v24</h1>
+    <h1>Ensemble_v21</h1>
     <div class="sub">Offline · Keine Abhängigkeiten</div>
     <button class="settings-toggle" id="settingsToggle" title="Erscheinungsbild anpassen">⚙</button>
   </div>
@@ -1000,7 +1000,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
         <div class="sf-loader-title">🗂 Soundfonts</div>
         <div class="mem-display" id="memDisplay" style="display:none"></div>
         <button class="sf-add-btn" id="sfAddBtn">＋ SF2 laden</button>
-        <input type="file" id="fileInput" accept=".sf2" multiple style="display:none">
+        <input type="file" id="fileInput" accept=".sf2,.sf3" multiple style="display:none">
       </div>
       <div class="sf-list" id="sfList">
         <div class="sf-empty" id="sfEmpty">Noch kein Soundfont geladen — „＋ SF2 laden" klicken oder Datei hierher ziehen</div>
@@ -1454,7 +1454,7 @@ input[type=range]::-moz-range-thumb{width:15px;height:15px;background:var(--acce
   </div>
 
   <div class="info-box">
-    <b>Tipp:</b> Lade eine lokale <b>.sf2-Datei</b> – alles läuft im Browser, nichts wird hochgeladen.<br>
+    <b>Tipp:</b> Lade eine lokale <b>.sf2/.sf3-Datei</b> – alles läuft im Browser, nichts wird hochgeladen.<br>
     Kostenlose SF2: <b>FluidR3_GM</b>, <b>GeneralUser GS</b> (Google: "free sf2 soundfont download")
   </div>
 </div>
@@ -2329,7 +2329,7 @@ async ensureCtx() {
     return this.ctx ? this.ctx.currentTime + 0.05 : 0;
   }
 
-  _silentWarm(sfIdx, presetIdx) { /* SpessaSynth handles internally */ }
+  _silentWarm(sfIdx, presetIdx) { this.prewarmPreset(sfIdx, presetIdx); }
   predecodeAll(sfIdx, onProgress) {
     // SpessaSynth handles decoding internally
     const sf = this.soundfonts[sfIdx];
@@ -2337,7 +2337,31 @@ async ensureCtx() {
     onProgress(1, 1, 0, false); // report "done"
   }
 
-  prewarmPreset(sfIdx, presetIdx) { /* SpessaSynth handles internally */ }
+  prewarmPreset(sfIdx, presetIdx) {
+    // Stilles noteOn/noteOff: dekodiert den Sample-Buffer im Worklet vorab,
+    // sodass der erste echte Ton nicht knackt.
+    if (!this.synth || !this._spessaReady) return;
+    const sf = this.soundfonts[sfIdx];
+    if (!sf) return;
+    const p = sf.presets[presetIdx];
+    if (!p) return;
+    const ch = 15; // Channel 16 als stiller Warm-up-Kanal (wird sonst nicht genutzt)
+    try {
+      this.synth.controllerChange(ch, 7, 0);   // Volume = 0 → komplett stumm
+      if (p.bank) {
+        this.synth.controllerChange(ch, 0,  Math.floor(p.bank / 128));
+        this.synth.controllerChange(ch, 32, p.bank % 128);
+      } else {
+        this.synth.controllerChange(ch, 0, 0);
+        this.synth.controllerChange(ch, 32, 0);
+      }
+      this.synth.programChange(ch, p.program);
+      this.synth.noteOn(ch, 60, 1);            // vel=1, unhörbar
+      setTimeout(() => {
+        try { this.synth.noteOff(ch, 60, false); } catch(e) {}
+      }, 200);
+    } catch(e) {}
+  }
 
   getZones(sfIdx, presetIdx) { return []; }   // not needed
   findZone(sfIdx, presetIdx, midi, vel) { return null; } // not needed
@@ -3629,6 +3653,12 @@ function renderLayers() {
       layer.presetIdx = layer.presetIdx < sf.presets.length ? layer.presetIdx : 0;
       psInput.value = psLabel(sf.presets[layer.presetIdx], layer.presetIdx);
       presetLabel.textContent = sf.presets[layer.presetIdx]?.name ?? '—';
+      // Preset-Dropdown neu aufbauen damit er die Presets der neuen SF2 zeigt
+      psRenderDrop('');
+      psDrop.classList.remove('open');
+      psSearch.value = '';
+      psClear.classList.remove('visible');
+      engine.resetChannel?.(layer.id);
     }
 
     sfSel.addEventListener('change', e => {
@@ -3636,6 +3666,11 @@ function renderLayers() {
       layer.presetIdx = 0;
       rebuildPresets();
       engine.stopAll();
+      // Jam: SF2-Wechsel senden
+      if (typeof jamBroadcastLayers === 'function') {
+        clearTimeout(jam._layerBroadcastTimer);
+        jam._layerBroadcastTimer = setTimeout(jamBroadcastLayers, 100);
+      }
     });
 
     selWrap.appendChild(sfSel);
@@ -4323,7 +4358,7 @@ async function renderCachedSF2s() {
       try {
         const ab = await sfDB.load(entry.name);
         if (!ab) throw new Error('Nicht gefunden');
-        const fakeFile = new File([ab], entry.name + '.sf2');
+        const fakeFile = new File([ab], entry.name + (entry.name.endsWith('.sf3') ? '.sf3' : '.sf2'));
         await window.loadFile(fakeFile);
       } catch(e) { loadBtn.textContent = '✕ Fehler'; console.error(e); }
     });
@@ -4341,10 +4376,10 @@ async function renderCachedSF2s() {
 }
 
 async function loadFile(file) {
-  if (!file||!file.name.toLowerCase().endsWith('.sf2')){setStatus('error','Nur .sf2-Dateien erlaubt');return;}
+  if (!file||!(/\.(sf2|sf3)$/i.test(file.name))){setStatus('error','Nur .sf2/.sf3-Dateien erlaubt');return;}
   // If a session is pending, only accept the expected SF2s
   if (window._pendingSession) {
-    const shortName = file.name.replace(/\.sf2$/i,'');
+    const shortName = file.name.replace(/\.(sf2|sf3)$/i,'');
     const needed = (window._pendingSession.soundfonts??[]).map(s=>s.name);
     if (needed.length && !needed.includes(shortName)) {
       document.getElementById('sessionInfo').textContent =
@@ -4360,7 +4395,7 @@ async function loadFile(file) {
       await new Promise(r => setTimeout(r, 100)); // UI updaten lassen
     }
     const ab = await file.arrayBuffer();
-    const shortName = file.name.replace(/\.sf2$/i,'');
+    const shortName = file.name.replace(/\.(sf2|sf3)$/i,'');
     const { sfIdx, presets } = await engine.load(ab, shortName, (lbl,pct)=>{showProg(lbl,pct);setStatus('loading',lbl);});
     // Save to IndexedDB in background (don't await — don't block UI)
     // Nur kleine SF2s (< 150MB) im Browser-Speicher cachen
@@ -4714,7 +4749,7 @@ sfLoaderPanel.addEventListener('dragover', e => { e.preventDefault(); sfLoaderPa
 sfLoaderPanel.addEventListener('dragleave', () => sfLoaderPanel.classList.remove('dragover'));
 sfLoaderPanel.addEventListener('drop', e => {
   e.preventDefault(); sfLoaderPanel.classList.remove('dragover');
-  Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.sf2')).forEach(f => window.loadFile(f));
+  Array.from(e.dataTransfer.files).filter(f => /\.(sf2|sf3)$/i.test(f.name)).forEach(f => window.loadFile(f));
 });
 
 // ── Play/Stop helpers ─────────────────────────────────────────
@@ -6776,8 +6811,18 @@ function recOverdub() {
   });
   rec.playTimers.push(setTimeout(() => {
     if (rec.state !== 'overdubbing') return;
-    recStopOverdub();
-    if (rec.looping) recOverdub();
+    // Aktuellen Overdub-Pass abschließen und Events mergen
+    for (const midi of heldNotes)
+      rec.overdubEvents.push({ t: performance.now()-rec.startT, type:'off', midi,
+        layerSnap: getActiveLayers().map(l => ({ id: l.id, transpose: l.transpose ?? 0 })) });
+    rec.events = [...rec.events, ...rec.overdubEvents].sort((a,b) => a.t - b.t);
+    rec.duration = Math.max(rec.duration,
+      rec.events.length ? rec.events[rec.events.length-1].t + 200 : rec.duration);
+    rec.overdubEvents = [];
+    rec.playTimers.forEach(t => clearTimeout(t));
+    rec.playTimers = [];
+    // Overdub läuft immer weiter (unabhängig vom Loop-Button) bis Stop gedrückt wird
+    recOverdub();
   }, rec.duration));
   rec.animFrame = requestAnimationFrame(recTick);
 }
@@ -7444,7 +7489,7 @@ function sessionLoad(file) {
             try {
               const ab = await sfDB.load(name);
               if (ab) {
-                const fakeFile = new File([ab], name + '.sf2');
+                const fakeFile = new File([ab], name + (name.endsWith('.sf3') ? '.sf3' : '.sf2'));
                 await window.loadFile(fakeFile);   // must use window.loadFile to trigger pending session
                 loaded++;
               }
@@ -7459,13 +7504,13 @@ function sessionLoad(file) {
                 `<span style="display:inline-flex;align-items:center;gap:6px;margin-top:4px">` +
                 `<span style="font-family:monospace;color:var(--textbright)">${n}.sf2</span>` +
                 `<label style="cursor:pointer;background:var(--accent);color:#000;font-size:.6rem;padding:2px 7px;border-radius:4px;font-weight:700" title="Suche nach: ${n}.sf2">` +
-                  `📂 Lokal<input type="file" accept=".sf2" style="display:none" data-expected="${n}" onchange="` +
+                  `📂 Lokal<input type="file" accept=".sf2,.sf3" style="display:none" data-expected="${n}" onchange="` +
                     `(function(inp){` +
                       `const f=inp.files[0];if(!f)return;` +
-                      `const got=f.name.replace(/\\.sf2$/i,'');` +
+                      `const got=f.name.replace(/\\.(sf2|sf3)$/i,'');` +
                       `const exp=inp.dataset.expected;` +
                       `if(got!==exp){` +
-                        `document.getElementById('sessionInfo').textContent='✕ Falsche Datei – benötigt: '+exp+'.sf2, gewählt: '+f.name;` +
+                        `document.getElementById('sessionInfo').textContent='✕ Falsche Datei – benötigt: '+exp+', gewählt: '+f.name;` +
                         `inp.value='';return;` +
                       `}` +
                       `window.loadFile(f);inp.value='';` +
